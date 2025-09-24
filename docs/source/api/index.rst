@@ -8,6 +8,7 @@ API
    :maxdepth: 3
 
    materials.rst
+   depletion.rst
    annular_collision_prob.rst
    geometry.rst
    moc.rst

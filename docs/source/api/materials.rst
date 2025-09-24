@@ -29,9 +29,6 @@ Materials
 .. autoclass:: scarabee.ResonantOneGroupXS
    :members:
 
-.. autoclass:: scarabee.DepletionReactionRates
-   :members:
-
 .. autoclass:: scarabee.Nuclide
    :members:
 
