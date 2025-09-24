@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
-#include <fstream>
 
 namespace scarabee {
 
@@ -307,9 +306,46 @@ void FissionYields::remove_nuclide(const std::string& nuclide) {
 
 void FissionYields::replace_nuclide(const std::string& nuclide,
                                     const std::string& new_nuclide) {
-  for (auto& target : targets_) {
-    if (target == nuclide) target = new_nuclide;
+  if (nuclide == new_nuclide) return;
+
+  // First, check if the new_nuclide already exists
+  std::size_t new_nuc_i = this->size();
+  std::size_t nuc_i = this->size();
+  for (std::size_t i = 0; i < this->size(); i++) {
+    if (this->targets()[i] == nuclide) {
+      nuc_i = i;
+    } else if (this->targets()[i] == new_nuclide) {
+      new_nuc_i = i;
+    }
+
+    if (nuc_i != this->size() && new_nuc_i != this->size()) break;
   }
+
+  // If we didn't find nuclide, we don't need to replace it !
+  if (nuc_i == this->size()) return;
+
+  if (nuc_i != this->size() && new_nuc_i != this->size()) {
+    // If the new_nuclide already exists, add it's contribution then drop the
+    // old index to nuclide
+    xt::view(yields_, xt::all(), new_nuc_i) +=
+        xt::view(yields_, xt::all(), nuc_i);
+
+    // Drop the old yields column
+    std::array<std::size_t, 1> dropped_ind{nuc_i};
+    auto view = xt::view(yields_, xt::all(), xt::drop(dropped_ind));
+    xt::xtensor<double, 2> temp_yields = view;
+    yields_ = temp_yields;
+
+    // Drop the old target
+    targets_.erase(targets_.begin() + nuc_i);
+
+    // Once we have dropped, nothing left to do !
+    return;
+  }
+
+  // If we get here, the new nuclide does not yet exist in targets, so we can
+  // just replace the old target with the new target
+  targets_[nuc_i] = new_nuclide;
 }
 
 void FissionYields::replace_nuclide(const std::string& nuclide,
@@ -327,11 +363,27 @@ void FissionYields::replace_nuclide(const std::string& nuclide,
   // Remove all instances of the nuclide
   this->remove_nuclide(nuclide);
 
+  // Go through and first add targets which already are present
+  std::vector<std::size_t> unused_targets;
+  for (std::size_t b = 0; b < targets.branches().size(); b++) {
+    const auto& branch = targets.branches()[b];
+    bool found_target = false;
+    for (std::size_t t = 0; t < this->size(); t++) {
+      if (branch.target == this->targets()[t]) {
+        for (std::size_t ie = 0; ie < this->incident_energies().size(); ie++) {
+          yields_(ie, t) += nuclide_yield_sums[ie] * branch.branch_ratio;
+        }
+        found_target = true;
+        break;
+      }
+    }
+    if (found_target == false) unused_targets.push_back(b);
+  }
+
   // Make copy of yields and then zero yields
   xt::xtensor<double, 2> old_yields = yields_;
-  yields_ =
-      xt::zeros<double>({old_yields.shape()[0],
-                         old_yields.shape()[1] + targets.branches().size()});
+  yields_ = xt::zeros<double>(
+      {old_yields.shape()[0], old_yields.shape()[1] + unused_targets.size()});
 
   // Re-fill yields
   for (std::size_t e = 0; e < yields_.shape()[0]; e++) {
@@ -342,16 +394,16 @@ void FissionYields::replace_nuclide(const std::string& nuclide,
         yields_(e, i) = old_yields(e, i);
       } else {
         // If in region of new target, get info from branch ratios
-        yields_(e, i) =
-            targets.branches()[ti].branch_ratio * nuclide_yield_sums[e];
+        yields_(e, i) = targets.branches()[unused_targets[ti]].branch_ratio *
+                        nuclide_yield_sums[e];
         ti++;
       }
     }
   }
 
   // Add the new targets to target list
-  for (const auto& branch : targets.branches()) {
-    targets_.push_back(branch.target);
+  for (const auto ti : unused_targets) {
+    targets_.push_back(targets.branches()[ti].target);
   }
 }
 

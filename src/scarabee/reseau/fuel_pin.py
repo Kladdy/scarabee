@@ -1149,7 +1149,7 @@ class FuelPin:
             flux = self._fuel_ring_flux_spectra[r]
             power += A * mat.compute_fission_power_density(flux, ndl)
         # Convert from MeV/cm/s to J/cm/s = w/cm
-        power *= 1.6021766339999e-13
+        power *= 1.602176634e-13
         return power
 
     def normalize_flux_spectrum(self, f) -> None:

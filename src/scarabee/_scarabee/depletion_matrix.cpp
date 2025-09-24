@@ -138,7 +138,6 @@ void DepletionMatrix::detail_exp_product(
   // Reassign number densities for the input span
   for (std::size_t n = 0; n < this->size(); n++) {
     N[n] = Ncmplx(n).real() * alpha0;
-
     if (N[n] < 0.) N[n] = 0.;
   }
 }
@@ -235,21 +234,26 @@ void fill_gain_terms(DepletionMatrix& matrix, const ChainEntry& nucinfo,
 std::shared_ptr<DepletionMatrix> build_depletion_matrix(
     std::shared_ptr<DepletionChain> chain, std::shared_ptr<Material> mat,
     std::span<const double> flux, std::shared_ptr<NDLibrary> ndl) {
+  // Get the vector of all reaction rate objects for the nuclides in the
+  // material
+  std::vector<DepletionReactionRates> nuc_rrs =
+      mat->compute_depletion_reaction_rates(flux, ndl);
+  return build_depletion_matrix(chain, nuc_rrs);
+}
+
+std::shared_ptr<DepletionMatrix> build_depletion_matrix(
+    std::shared_ptr<DepletionChain> chain,
+    std::vector<DepletionReactionRates>& nuc_rrs) {
   // Start by making a set of initial nuclides.
   // These are only the depletable nuclides !!
   std::set<std::string> initial_dep_nuclides;
-  for (const auto& nuc : mat->composition().nuclides) {
-    initial_dep_nuclides.insert(nuclide_name_to_simple_name(nuc.name));
+  for (const auto& nuc_rr : nuc_rrs) {
+    initial_dep_nuclides.insert(nuclide_name_to_simple_name(nuc_rr.nuclide));
   }
 
   // Get the sorted list of all possible targets
   std::vector<std::string> all_targets =
       chain->descend_chains(initial_dep_nuclides);
-
-  // Get the vector of all reaction rate objects for the nuclides in the
-  // material
-  std::vector<DepletionReactionRates> nuc_rrs =
-      mat->compute_depletion_reaction_rates(flux, ndl);
 
   // With this, we can build the matrix object
   std::shared_ptr<DepletionMatrix> matrix_ptr =

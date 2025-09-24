@@ -75,6 +75,7 @@ void init_DepletionMatrix(py::module& m) {
             std::span<double> Nspn(N.data(), N.size());
             m.exponential_product(Nspn, cram48);
           },
+          py::call_guard<py::gil_scoped_release>(),
           "Computes the matrix product of the input vector N with the "
           "exponential of the depletion matrix. The array N is modified in "
           "place to contain the result of this product.\n\n"
@@ -122,6 +123,7 @@ void init_DepletionMatrix(py::module& m) {
         std::span<const double> flux_spn(flux.data(), flux.size());
         return build_depletion_matrix(chain, mat, flux_spn, ndl);
       },
+      py::call_guard<py::gil_scoped_release>(),
       "Builds a depletion matrix for a given material and flux spectrum.\n\n"
       "Parameters\n"
       "----------\n"
@@ -139,6 +141,27 @@ void init_DepletionMatrix(py::module& m) {
       "-------\n"
       "DepletionMatrix\n"
       "    Depletion matrix for the provided material and flux spectrum. The "
-      "    matrix has not been multiplied by any time step at this point.\n",
+      "    matrix has not been multiplied by any time step at this point.\n\n",
       py::arg("chain"), py::arg("mat"), py::arg("flux"), py::arg("ndl"));
+
+  m.def(
+      "build_depletion_matrix",
+      [](std::shared_ptr<DepletionChain> chain,
+         std::vector<DepletionReactionRates>& nuc_rrs) {
+        return build_depletion_matrix(chain, nuc_rrs);
+      },
+      py::call_guard<py::gil_scoped_release>(),
+      "Builds a depletion matrix for a given set of reaction rates.\n\n"
+      "Parameters\n"
+      "----------\n"
+      "chain : DepletionChain\n"
+      "    Depletion chain to used when building the matrix.\n"
+      "nuc_rrs : list of DepletionReactionRates\n"
+      "    Integrated reaction rates for all nuclides.\n\n"
+      "Returns\n"
+      "-------\n"
+      "DepletionMatrix\n"
+      "    Depletion matrix for the provided reaction rates. The matrix\n"
+      "    has not been multiplied by any time step at this point.\n\n",
+      py::arg("chain"), py::arg("nuc_rrs"));
 }

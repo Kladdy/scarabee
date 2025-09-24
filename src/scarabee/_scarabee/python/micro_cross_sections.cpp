@@ -48,6 +48,9 @@ void init_MicroCrossSectionStructs(py::module& m) {
       m, "DepletionReactionRates",
       "Holds the reaction rate data for a single nuclide, used in depletion "
       "calculations.")
+
+      .def(py::init<>(), "Initializes an empty set of reaction rates.\n\n")
+
       .def_readwrite("nuclide", &DepletionReactionRates::nuclide,
                      "Name of the nuclide.")
       .def_readwrite(

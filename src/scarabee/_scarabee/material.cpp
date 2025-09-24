@@ -644,6 +644,7 @@ std::vector<DepletionReactionRates> Material::compute_depletion_reaction_rates(
       }
 
       double& rr = dep_rrs.back().n_gamma;
+      rr = 0.;
       for (std::size_t g = 0; g < xs.ngroups(); g++)
         rr += xs.xs_fast(g) * flux[g];
       rr *= CM2_PER_BARN;
@@ -659,6 +660,7 @@ std::vector<DepletionReactionRates> Material::compute_depletion_reaction_rates(
       }
 
       double& rr = dep_rrs.back().n_2n;
+      rr = 0.;
       for (std::size_t g = 0; g < xs.ngroups(); g++)
         rr += xs.xs_fast(g) * flux[g];
       rr *= CM2_PER_BARN;
@@ -674,6 +676,7 @@ std::vector<DepletionReactionRates> Material::compute_depletion_reaction_rates(
       }
 
       double& rr = dep_rrs.back().n_3n;
+      rr = 0.;
       for (std::size_t g = 0; g < xs.ngroups(); g++)
         rr += xs.xs_fast(g) * flux[g];
       rr *= CM2_PER_BARN;
@@ -689,6 +692,7 @@ std::vector<DepletionReactionRates> Material::compute_depletion_reaction_rates(
       }
 
       double& rr = dep_rrs.back().n_p;
+      rr = 0.;
       for (std::size_t g = 0; g < xs.ngroups(); g++)
         rr += xs.xs_fast(g) * flux[g];
       rr *= CM2_PER_BARN;
@@ -704,6 +708,7 @@ std::vector<DepletionReactionRates> Material::compute_depletion_reaction_rates(
       }
 
       double& rr = dep_rrs.back().n_alpha;
+      rr = 0.;
       for (std::size_t g = 0; g < xs.ngroups(); g++)
         rr += xs.xs_fast(g) * flux[g];
       rr *= CM2_PER_BARN;
@@ -719,6 +724,7 @@ std::vector<DepletionReactionRates> Material::compute_depletion_reaction_rates(
       }
 
       double& rr = dep_rrs.back().n_fission;
+      rr = 0.;
       double Err = 0.;
       for (std::size_t g = 0; g < xs.ngroups(); g++) {
         const double Ef_flx_g = xs.xs_fast(g) * flux[g];

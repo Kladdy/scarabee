@@ -4,6 +4,7 @@
 #include <data/depletion_chain.hpp>
 #include <data/nd_library.hpp>
 #include <data/material.hpp>
+#include <data/micro_cross_sections.hpp>
 #include <utils/logging.hpp>
 #include <utils/scarabee_exception.hpp>
 
@@ -12,7 +13,6 @@
 #include <array>
 #include <complex>
 #include <memory>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -132,6 +132,10 @@ class DepletionMatrix {
 std::shared_ptr<DepletionMatrix> build_depletion_matrix(
     std::shared_ptr<DepletionChain> chain, std::shared_ptr<Material> mat,
     std::span<const double> flux, std::shared_ptr<NDLibrary> ndl);
+
+std::shared_ptr<DepletionMatrix> build_depletion_matrix(
+    std::shared_ptr<DepletionChain> chain,
+    std::vector<DepletionReactionRates>& nuc_rrs);
 
 }  // namespace scarabee
 
