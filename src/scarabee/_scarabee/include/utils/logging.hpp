@@ -8,7 +8,6 @@
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 
-#include <iostream>
 #include <mutex>
 #include <string>
 
@@ -49,6 +48,8 @@ using PythonSinkMT = PythonSink<std::mutex>;
 
 // Single-Threaded Sink
 using PythonSinkST = PythonSink<spdlog::details::null_mutex>;
+
+extern const char* log_format;
 
 }  // namespace scarabee
 

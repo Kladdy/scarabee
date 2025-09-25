@@ -1,11 +1,27 @@
 #include <pybind11/pybind11.h>
+
 #include <utils/logging.hpp>
 
 #include <string>
+#include "spdlog/spdlog.h"
 
 namespace py = pybind11;
 
 using namespace scarabee;
+
+void use_python_sink() {
+  // First, delete prior default sink
+  spdlog::default_logger()->sinks().clear();
+
+  // Create a new custom sink
+  auto python_sink = std::make_shared<PythonSinkMT>();
+
+  // Set the patern for logging output
+  python_sink->set_pattern(log_format);
+
+  // Save the sink to the logger
+  spdlog::default_logger()->sinks().push_back(python_sink);
+}
 
 void scarabee_log(LogLevel lvl, const std::string& mssg) {
   switch (lvl) {
@@ -44,6 +60,8 @@ void init_Logging(py::module& m) {
       .value("Off", LogLevel::off)
       .value("Trace", LogLevel::trace)
       .value("Warning", LogLevel::warn);
+
+  m.def("_use_python_sink", &use_python_sink);
 
   m.def("set_logging_level", &set_logging_level,
         "Sets the verbosity of logging output.\n\n"
