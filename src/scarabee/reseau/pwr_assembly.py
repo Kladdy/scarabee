@@ -1189,7 +1189,7 @@ class PWRAssembly:
                 ):
                     pin_volume *= 0.5
 
-                sum_density += pin_avg_density
+                sum_density += pin_volume * pin_avg_density
                 sum_volume += pin_volume
 
         return sum_density / sum_volume
