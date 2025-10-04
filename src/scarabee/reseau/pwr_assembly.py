@@ -53,7 +53,7 @@ class Symmetry(Enum):
 
     Half = 2
     """
-    The fuel assembly has about either the x or y axis (but not both).
+    The fuel assembly has symmetry about either the x or y axis (but not both).
     """
 
     Quarter = 3
