@@ -168,5 +168,9 @@ void init_CylindricalCell(py::module& m) {
            "Returns\n"
            "CrossSection\n"
            "            Cross section in region i.",
-           py::arg("i"));
+           py::arg("i"))
+
+      .def("__deepcopy__", [](const CylindricalCell& cell, py::dict) {
+        return CylindricalCell(cell);
+      });
 }

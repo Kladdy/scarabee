@@ -283,5 +283,13 @@ void init_DiffusionData(py::module& m) {
                   "DiffusionData\n"
                   "    Diffusion cross sections, form factors, and ADF from "
                   "the file.\n",
-                  py::arg("fname"));
+                  py::arg("fname"))
+
+      .def("__deepcopy__", [](const DiffusionData& xs, py::dict) {
+        DiffusionData out(std::make_shared<DiffusionCrossSection>(*xs.xs()));
+        out.set_adf(xs.adf());
+        out.set_cdf(xs.cdf());
+        out.set_form_factors(xs.form_factors());
+        return out;
+      });
 }

@@ -3,6 +3,8 @@
 #include <xtensor-python/pytensor.hpp>
 
 #include <cylindrical_flux_solver.hpp>
+#include "spdlog/spdlog.h"
+#include "utils/logging.hpp"
 
 namespace py = pybind11;
 
@@ -22,6 +24,10 @@ void init_CylindricalFluxSolver(py::module& m) {
            "cell : CylindricalCell\n"
            "       Pin cell in which to find the flux.",
            py::arg("cell"))
+
+      .def_property_readonly(
+          "cell", &CylindricalFluxSolver::cell,
+          "CylindricalCell instance used to compute the flux.")
 
       .def_property_readonly("ngroups", &CylindricalFluxSolver::ngroups,
                              "Number of energy groups.")
@@ -266,5 +272,30 @@ void init_CylindricalFluxSolver(py::module& m) {
 
       .def_property_readonly(
           "solved", &CylindricalFluxSolver::solved,
-          "True if the system has been solved, False otherwise.");
+          "True if the system has been solved, False otherwise.")
+
+      .def("__deepcopy__", [](const CylindricalFluxSolver& cfs, py::dict) {
+        CylindricalFluxSolver out(
+            std::make_shared<CylindricalCell>(*cfs.cell()));
+        out.set_flux_tolerance(cfs.flux_tolerance());
+        out.set_keff_tolerance(cfs.keff_tolerance());
+        out.sim_mode() = cfs.sim_mode();
+        out.set_albedo(cfs.albedo());
+        for (std::size_t g = 0; g < cfs.ngroups(); g++) {
+          out.set_j_ext(g, cfs.j_ext(g));
+
+          for (std::size_t i = 0; i < cfs.nregions(); i++) {
+            out.set_extern_src(i, g, cfs.extern_src(i, g));
+          }
+        }
+
+        if (cfs.solved()) {
+          const auto orig_level = spdlog::get_level();
+          spdlog::set_level(LogLevel::off);
+          out.solve();
+          spdlog::set_level(orig_level);
+        }
+
+        return out;
+      });
 }

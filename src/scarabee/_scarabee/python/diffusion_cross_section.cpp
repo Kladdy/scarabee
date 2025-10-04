@@ -185,5 +185,9 @@ void init_DiffusionCrossSection(py::module& m) {
           "-------\n"
           "DiffusionCrossSection\n"
           "    Diffusion cross sections from the file.\n",
-          py::arg("fname"));
+          py::arg("fname"))
+
+      .def("__deepcopy__", [](const DiffusionCrossSection& xs, py::dict) {
+        return DiffusionCrossSection(xs);
+      });
 }
