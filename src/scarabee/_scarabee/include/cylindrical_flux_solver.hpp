@@ -21,6 +21,8 @@ class CylindricalFluxSolver {
  public:
   CylindricalFluxSolver(std::shared_ptr<CylindricalCell> cell);
 
+  const std::shared_ptr<CylindricalCell>& cell() const { return cell_; }
+
   std::size_t ngroups() const { return cell_->ngroups(); }
   std::size_t nregions() const { return cell_->nregions(); }
 
@@ -63,22 +65,22 @@ class CylindricalFluxSolver {
   double albedo() const { return a_; }
   void set_albedo(double a);
 
-  double j_ext(std::uint32_t g) const { return j_ext_[g]; }
-  void set_j_ext(std::uint32_t g, double j) {
+  double j_ext(std::size_t g) const { return j_ext_[g]; }
+  void set_j_ext(std::size_t g, double j) {
     j_ext_[g] = j;
     solved_ = false;
   }
 
-  double j_neg(std::uint32_t g) const {
+  double j_neg(std::size_t g) const {
     return (a_ * x_[g] + j_ext_[g]) / (1. - a_ * (1. - cell_->Gamma(g)));
   }
 
-  double j_pos(std::uint32_t g) const {
+  double j_pos(std::size_t g) const {
     return (x_[g] + (1. - cell_->Gamma(g)) * j_ext_[g]) /
            (1. - a_ * (1. - cell_->Gamma(g)));
   }
 
-  double j(std::uint32_t g) const {
+  double j(std::size_t g) const {
     return ((1. - a_) * x_[g] - cell_->Gamma(g) * j_ext_[g]) /
            (1. - a_ * (1. - cell_->Gamma(g)));
   }
@@ -103,9 +105,9 @@ class CylindricalFluxSolver {
                            const xt::xtensor<double, 2>& flux) const;
   void fill_scatter_source(xt::xtensor<double, 2>& source,
                            const xt::xtensor<double, 2>& flux) const;
-  double Qscat(std::uint32_t g, std::size_t i,
+  double Qscat(std::size_t g, std::size_t i,
                const xt::xtensor<double, 2>& flux) const;
-  double Qfiss(std::uint32_t g, std::size_t i,
+  double Qfiss(std::size_t g, std::size_t i,
                const xt::xtensor<double, 2>& flux) const;
 
   void solve_single_thread();

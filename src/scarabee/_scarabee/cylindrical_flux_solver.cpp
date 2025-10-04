@@ -82,12 +82,12 @@ void CylindricalFluxSolver::set_keff_tolerance(double ktol) {
   solved_ = false;
 }
 
-double CylindricalFluxSolver::Qscat(std::uint32_t g, std::size_t i,
+double CylindricalFluxSolver::Qscat(std::size_t g, std::size_t i,
                                     const xt::xtensor<double, 2>& flux) const {
   double Qout = 0.;
   const auto& xs = cell_->xs(i);
 
-  for (std::uint32_t gg = 0; gg < ngroups(); gg++) {
+  for (std::size_t gg = 0; gg < ngroups(); gg++) {
     const double flux_gg_i = flux(gg, i);
 
     // Scattering into group g, excluding g -> g
@@ -97,14 +97,14 @@ double CylindricalFluxSolver::Qscat(std::uint32_t g, std::size_t i,
   return Qout;
 }
 
-double CylindricalFluxSolver::Qfiss(std::uint32_t g, std::size_t i,
+double CylindricalFluxSolver::Qfiss(std::size_t g, std::size_t i,
                                     const xt::xtensor<double, 2>& flux) const {
   double Qout = 0.;
   const double inv_k = 1. / k_;
   const auto& xs = cell_->xs(i);
   const double chi_g = xs->chi(g);
 
-  for (std::uint32_t gg = 0; gg < ngroups(); gg++) {
+  for (std::size_t gg = 0; gg < ngroups(); gg++) {
     Qout += xs->vEf(gg) * flux(gg, i);
   }
 
@@ -119,7 +119,7 @@ double CylindricalFluxSolver::calc_keff(
   for (std::size_t r = 0; r < nregions(); r++) {
     const double Vr = cell_->volume(r);
     const auto& xs = cell_->xs(r);
-    for (std::uint32_t g = 0; g < ngroups(); g++) {
+    for (std::size_t g = 0; g < ngroups(); g++) {
       keff += Vr * xs->vEf(g) * flux(g, r);
     }
   }
@@ -132,7 +132,7 @@ double CylindricalFluxSolver::calc_flux_rel_diff(
     const xt::xtensor<double, 2>& next_flux) const {
   double max_rel_diff = 0.;
 
-  for (std::uint32_t g = 0; g < ngroups(); g++) {
+  for (std::size_t g = 0; g < ngroups(); g++) {
     for (std::size_t r = 0; r < nregions(); r++) {
       const double rel_diff =
           std::abs(next_flux(g, r) - flux(g, r)) / flux(g, r);
@@ -146,7 +146,7 @@ double CylindricalFluxSolver::calc_flux_rel_diff(
 
 void CylindricalFluxSolver::fill_fission_source(
     xt::xtensor<double, 2>& source, const xt::xtensor<double, 2>& flux) const {
-  for (std::uint32_t g = 0; g < ngroups(); g++) {
+  for (std::size_t g = 0; g < ngroups(); g++) {
     for (std::size_t r = 0; r < nregions(); r++) {
       source(g, r) = Qfiss(g, r, flux);
     }
@@ -155,7 +155,7 @@ void CylindricalFluxSolver::fill_fission_source(
 
 void CylindricalFluxSolver::fill_scatter_source(
     xt::xtensor<double, 2>& source, const xt::xtensor<double, 2>& flux) const {
-  for (std::uint32_t g = 0; g < ngroups(); g++) {
+  for (std::size_t g = 0; g < ngroups(); g++) {
     for (std::size_t r = 0; r < nregions(); r++) {
       source(g, r) = Qscat(g, r, flux);
     }
@@ -228,7 +228,7 @@ void CylindricalFluxSolver::solve_single_thread() {
       fill_scatter_source(scat_source, next_flux);
 
       // From the sources, we calculate the new flux values
-      for (std::uint32_t g = 0; g < ngroups(); g++) {
+      for (std::size_t g = 0; g < ngroups(); g++) {
         for (std::size_t r = 0; r < nregions(); r++) {
           const double Yr = cell_->Y(a_, g, r);
 
@@ -277,7 +277,7 @@ void CylindricalFluxSolver::solve_single_thread() {
   // Now that we have the solution, we need to get the number of source
   // neutrons reaching the boundary, x, from Stamm'ler and Abbate.
   // These are used when calculating the currents.
-  for (std::uint32_t g = 0; g < ngroups(); g++) {
+  for (std::size_t g = 0; g < ngroups(); g++) {
     for (std::size_t r = 0; r < nregions(); r++) {
       x_[g] +=
           (Qfiss(g, r, flux_) + Qscat(g, r, flux_) + extern_source_(g, r)) *
@@ -390,7 +390,7 @@ void CylindricalFluxSolver::solve_parallel() {
   // Now that we have the solution, we need to get the number of source
   // neutrons reaching the boundary, x, from Stamm'ler and Abbate.
   // These are used when calculating the currents.
-  for (std::uint32_t g = 0; g < ngroups(); g++) {
+  for (std::size_t g = 0; g < ngroups(); g++) {
     for (std::size_t r = 0; r < nregions(); r++) {
       x_[g] +=
           (Qfiss(g, r, flux_) + Qscat(g, r, flux_) + extern_source_(g, r)) *
