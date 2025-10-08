@@ -48,7 +48,7 @@ extern void init_ReflectorSN(py::module&);
 extern void init_WaterFuncs(py::module&);
 extern void init_DepletionMatrix(py::module&);
 
-PYBIND11_MODULE(_scarabee, m) {
+PYBIND11_MODULE(_scarabee, m, py::mod_gil_not_used()) {
   xt::import_numpy();
 
   init_Logging(m);

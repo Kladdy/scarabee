@@ -3,13 +3,16 @@
 #include <utils/logging.hpp>
 
 #include <string>
-#include "spdlog/spdlog.h"
+#include <mutex>
 
 namespace py = pybind11;
 
 using namespace scarabee;
 
 void use_python_sink() {
+  static std::mutex mutex;
+  std::scoped_lock lock(mutex);
+
   // First, delete prior default sink
   spdlog::default_logger()->sinks().clear();
 
@@ -24,6 +27,9 @@ void use_python_sink() {
 }
 
 void scarabee_log(LogLevel lvl, const std::string& mssg) {
+  static std::mutex mutex;
+  std::scoped_lock lock(mutex);
+
   switch (lvl) {
     case LogLevel::critical:
       spdlog::critical(mssg);
