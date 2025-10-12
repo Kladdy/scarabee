@@ -12,3 +12,7 @@ Lattice Tool Chains
 .. autoclass:: scarabee.reseau.PWRAssembly
 
 .. autoclass:: scarabee.reseau.Reflector
+
+.. autoclass:: scarabee.reseau.NodalFlux1D
+
+.. autoclass:: scarabee.reseau.NodalFlux2D

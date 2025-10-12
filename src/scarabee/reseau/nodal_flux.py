@@ -147,6 +147,21 @@ class NodalFlux1D:
             self.a[g, 1:] = a_tmp[g * 4 : g * 4 + 4]
 
     def __call__(self, x: float, g: int) -> float:
+        """
+        Evaluates the nodal flux at position x in group g.
+
+        Parameters
+        ----------
+        x : float
+            Position for the flux evaluation.
+        g : int
+            Energy group for the flux evaluation.
+
+        Returns
+        -------
+        float
+            Nodal flux
+        """
         if g < 0:
             raise RuntimeError("Group index g must be >= 0.")
 
@@ -180,6 +195,20 @@ class NodalFlux1D:
         return flx
 
     def pos_surf_flux(self, g: Optional[int] = None) -> Union[np.ndarray, float]:
+        """
+        Evaluates the nodal flux at the positive surface in group g. If g is
+        None, an array with the surface flux in all groups is returned.
+
+        Parameters
+        ----------
+        g : int, optional
+            Energy group for the flux evaluation. Default is None.
+
+        Returns
+        -------
+        np.ndarray or float
+            Nodal flux on the positive surface
+        """
         if g is None:
             return self.a[:, 0] + 0.5 * self.a[:, 1] + 0.5 * self.a[:, 2]
 
@@ -192,6 +221,20 @@ class NodalFlux1D:
         return self.a[g, 0] + 0.5 * self.a[g, 1] + 0.5 * self.a[g, 2]
 
     def neg_surf_flux(self, g: Optional[int] = None) -> Union[np.ndarray, float]:
+        """
+        Evaluates the nodal flux at the negative surface in group g. If g is
+        None, an array with the surface flux in all groups is returned.
+
+        Parameters
+        ----------
+        g : int, optional
+            Energy group for the flux evaluation. Default is None.
+
+        Returns
+        -------
+        np.ndarray or float
+            Nodal flux on the negative surface
+        """
         if g is None:
             return self.a[:, 0] - 0.5 * self.a[:, 1] + 0.5 * self.a[:, 2]
 
@@ -256,6 +299,23 @@ class NodalFlux2D:
         j_y_pos : np.ndarray
              Reference net current in each group on the positive y boundary
              from the reference calculation.
+
+        Attributes
+        ----------
+        dx : float
+            Width along the x direction.
+        dy : float
+            Width along the y direction.
+        keff : float
+            Multiplication factor to use for the node.
+        ngroups : int
+            Number of energy groups.
+        phi_0 : np.ndarray
+            Average flux in the node for each group.
+        flux_x : NodalFlux1D
+            Expansion of the nodal flux along the x axis.
+        flux_y : NodalFlux1D
+            Expansion of the nodal flux along the y axis.
         """
         self.keff = keff
         self.ngroups = xs.ngroups
@@ -377,7 +437,24 @@ class NodalFlux2D:
             self.ay0[g] = -self.ay1[g] * sinhc(zeta_y)
             self.zeta_y[g] = zeta_y
 
-    def __call__(self, x, y) -> np.ndarray:
+    def __call__(self, x: float, y: float) -> np.ndarray:
+        """
+        Evaluates the nodal flux in all groups at the position (x,y). The node
+        is centered at (0,0), so the x value must be in the range [-dx/2, dx/2]
+        and the y value must be in the range [-dy/2, dy/2].
+
+        Parameters
+        ----------
+        x : float
+            x position in the node.
+        y : float
+            y position in the node.
+
+        Returns
+        -------
+        np.ndarray
+            Nodal flux in all groups.
+        """
         return self.phi_0 + self.fx(x) + self.fy(y) + self.fxy(x, y)
 
     def flux_xy_no_cross(self, x, y) -> np.ndarray:
