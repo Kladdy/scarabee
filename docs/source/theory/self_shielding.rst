@@ -456,11 +456,12 @@ constrained to
 	\sum_n b_n = 1.
 
 Adding multiple terms can provide a better approximation of the true escape
-probability. Substitution into Eq. :eq:`fuel_flux_cp` yields
+probability. Substitution into Eq. :eq:`fuel_flux_cp` and application of the
+intermediate resonance approximation yields
 
 .. math::
 
-	\varphi_f(E) = \frac{1}{E}\sum_n b_n \frac{\sigma_{p,r} + \sigma_{0,n}}{\sigma_{t,r}(E) + \sigma_{0,n}},
+	\varphi_f(E) = \frac{1}{E}\sum_n b_n \frac{\lambda_{r}\sigma_{p,r} + \sigma_{0,n}}{\sigma_{a,r}(E) + \lambda_{r}\sigma_{s,r}(E) + \sigma_{0,n}},
 
 where the effective dilution for the :math:`n\text{th}` term is
 
