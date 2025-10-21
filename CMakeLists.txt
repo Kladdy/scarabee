@@ -9,11 +9,11 @@ option(SCARABEE_USE_OMP "Compile Scarabée with OpenMP for shared memory paralle
 include(FetchContent)
 
 #===============================================================================
-# Get Eigen version 3.4.0 + 
-message(STATUS "Downloading Eigen")
+# Get Eigen
+message(STATUS "Downloading Eigen3 v5.0.0")
 FetchContent_Declare(eigen
   GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG        2cd47d743e8e921629c066f3543d58cf6ba724de  # April 8 2025
+  GIT_TAG        5.0.0
   EXCLUDE_FROM_ALL
 )
 set(BUILD_TESTING OFF)
@@ -23,10 +23,10 @@ FetchContent_MakeAvailable(eigen)
 
 #===============================================================================
 # Get SPDLOG
-message(STATUS "Downloading spdlog v1.15.2")
+message(STATUS "Downloading spdlog v1.16.0")
 FetchContent_Declare(spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG        v1.15.2
+  GIT_TAG        v1.16.0
   EXCLUDE_FROM_ALL
 )
 set(SPDLOG_BUILD_PIC ON CACHE BOOL "Build position independent code (-fPIC)")
@@ -44,10 +44,10 @@ FetchContent_MakeAvailable(htl)
 
 #===============================================================================
 # Get XTL
-message(STATUS "Downloading xtl v0.8.0")
+message(STATUS "Downloading xtl v0.8.1")
 FetchContent_Declare(xtl
   GIT_REPOSITORY https://github.com/xtensor-stack/xtl.git
-  GIT_TAG        0.8.0
+  GIT_TAG        0.8.1
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(xtl)
@@ -64,10 +64,10 @@ FetchContent_MakeAvailable(xsimd)
 
 #===============================================================================
 # Get XTENSOR
-message(STATUS "Downloading xtensor v0.27.0")
+message(STATUS "Downloading xtensor v0.27.1")
 FetchContent_Declare(xtensor
   GIT_REPOSITORY https://github.com/xtensor-stack/xtensor.git
-  GIT_TAG        0.27.0
+  GIT_TAG        0.27.1
   EXCLUDE_FROM_ALL
 )
 set(XTENSOR_USE_XSIMD ON CACHE BOOL "Enable SIMD acceleration.")
@@ -92,10 +92,10 @@ endif()
 
 #===============================================================================
 # Get XTENSOR-PYTHON
-message(STATUS "Downloading xtensor-python v0.28.0 with Hunter's NumPy fix")
+message(STATUS "Downloading xtensor-python v0.29.0 with Hunter's NumPy fix")
 FetchContent_Declare(xtensor-python
   GIT_REPOSITORY https://github.com/HunterBelanger/xtensor-python.git
-  GIT_TAG        fix/find_numpy
+  GIT_TAG        b5bf577 # fix/find_numpy branch on October 21, 2025
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(xtensor-python)
@@ -120,7 +120,7 @@ FetchContent_MakeAvailable(hdf5)
 
 #===============================================================================
 # Get HighFive
-message(STATUS "Downloading HighFive")
+message(STATUS "Downloading HighFive v3.2.0")
 set(HIGHFIVE_UNIT_TESTS OFF)
 set(HIGHFIVE_TEST_SPAN OFF)
 set(HIGHFIVE_EXAMPLES OFF)
@@ -128,7 +128,7 @@ set(HIGHFIVE_BUILD_DOCS OFF)
 set(HIGHFIVE_FIND_HDF5 OFF)
 FetchContent_Declare(HighFive
   GIT_REPOSITORY https://github.com/highfive-devs/highfive.git
-  GIT_TAG        main
+  GIT_TAG        v3.2.0
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(HighFive)
@@ -138,7 +138,7 @@ FetchContent_MakeAvailable(HighFive)
 message(STATUS "Downloading ImApp")
 FetchContent_Declare(ImApp
   GIT_REPOSITORY https://github.com/HunterBelanger/ImApp.git
-  GIT_TAG        12b3dd6 # Master branch on July 19, 2025
+  GIT_TAG        7bcee00 # Master branch on October 21, 2025
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(ImApp)
@@ -151,7 +151,7 @@ set(BUILD_SANDBOX OFF)
 set(SKIP_PERFORMANCE_COMPARISON ON)
 FetchContent_Declare(cereal
   GIT_REPOSITORY https://github.com/USCiLab/cereal.git
-  GIT_TAG        master
+  GIT_TAG        a56bad8 # Master branch on January 20, 2025
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(cereal)

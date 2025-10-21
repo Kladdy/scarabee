@@ -5,6 +5,7 @@
 
 #include <sstream>
 #include <random>
+#include "imgui.h"
 
 namespace scarabee {
 
@@ -340,6 +341,14 @@ void MOCPlotter::render_controls() {
 
     ImGui::EndPopup();
   }
+
+  // Application Font
+  ImGui::Separator();
+  ImGuiStyle& style = ImGui::GetStyle();
+  ImGui::SliderFloat("Font Size", &style.FontSizeBase, 10.0f, 60.0f, "%.0f");
+  style._NextFrameFontSizeBase =
+      style.FontSizeBase;  // FIXME: Temporary hack until we finish remaining
+                           // work.
 
   ImGui::End();
 }
