@@ -792,8 +792,8 @@ class GuideTube:
         LE/QI is used for all subsequent time steps. The predicted material
         compositions are appended to the materials lists.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
 
         chain : DepletionChain
             Depletion chain to use for radioactive decay and transmutation.

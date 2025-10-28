@@ -22,8 +22,8 @@ class NodalFlux1D:
         that is required to define discontinuity factors for generalized
         equivalence theory.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         x_min : float
              Position of the negative surface of the node.
         x_max : float
@@ -274,8 +274,8 @@ class NodalFlux2D:
         NEMDriver::fit_node_recon_params_corners for an example of how this
         should be done. It follows the ANOVA-HDMR Decomposition method [3].
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         dx : float
              Width of the node along the x axis.
         dy : float
