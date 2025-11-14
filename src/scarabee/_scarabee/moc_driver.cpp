@@ -504,15 +504,6 @@ void MOCDriver::solve_anisotropic() {
     if (cmfd_) cmfd_->zero_currents();
     sweep_anisotropic(next_flux, src);
 
-    // If MOC iterations are skipped compute Keff
-    // the normal way
-    if (mode_ == SimulationMode::Keff &&
-        (cmfd_ == nullptr || (cmfd_ != nullptr && cmfd_->solved() == false))) {
-      prev_keff = keff_;
-      keff_ = calc_keff(next_flux, flux_);
-      rel_diff_keff = std::abs(keff_ - prev_keff) / keff_;
-    }
-
     // Get difference
     auto new_flux = xt::view(next_flux, xt::all(), xt::all(), 0);
     auto old_flux = xt::view(flux_, xt::all(), xt::all(), 0);
@@ -529,10 +520,21 @@ void MOCDriver::solve_anisotropic() {
       }
     }
 
+    // If MOC iterations are skipped compute Keff
+    // the normal way
+    if (mode_ == SimulationMode::Keff &&
+        (cmfd_ == nullptr || (cmfd_ != nullptr && cmfd_->solved() == false) ||
+         set_neg_flux_to_zero)) {
+      prev_keff = keff_;
+      keff_ = calc_keff(next_flux, flux_);
+      rel_diff_keff = std::abs(keff_ - prev_keff) / keff_;
+    }
+
+    // Must do this BEFORE CMFD but AFTER calculating keff
     flux_ = next_flux;
 
     // Apply CMFD
-    if (cmfd_) {
+    if (cmfd_ && set_neg_flux_to_zero == false) {
       cmfd_->solve(*this, prev_keff, iteration);
       if (cmfd_->solved() && mode_ == SimulationMode::Keff) {
         prev_keff = keff_;
@@ -586,7 +588,7 @@ void MOCDriver::sweep(xt::xtensor<double, 3>& sflux,
         const Direction u_back = -u_forw;
 
         // Load the angular flux for forward direction
-        htl::static_vector<double, 6> angflux;
+        htl::static_vector<double, 32> angflux;
         for (std::size_t p = 0; p < n_pol_angles_; p++)
           angflux.push_back(track.entry_flux()(g, p));
 
@@ -714,7 +716,7 @@ void MOCDriver::sweep_anisotropic(xt::xtensor<double, 3>& sflux,
     for (auto& tracks : tracks_) {
       for (std::size_t t = 0; t < tracks.size(); t++) {
         auto& track = tracks[t];
-        htl::static_vector<double, 12> angflux;
+        htl::static_vector<double, 64> angflux;
         for (std::size_t pp = 0; pp < n_pol_angles_; pp++)
           angflux.push_back(track.entry_flux()(g, pp));
         const double tw = 4. * PI * track.wgt() *
@@ -1856,6 +1858,7 @@ std::shared_ptr<CrossSection> MOCDriver::homogenize(
       const double V = volume(i);
       const double flx = flux(i, g);
       const double coeff = invs_sum_fluxV * flx * V;
+      Et(g) += coeff * mat->Et(g);
       Dtr(g) += coeff * mat->Dtr(g);
       Ea(g) += coeff * mat->Ea(g);
       Ef(g) += coeff * mat->Ef(g);
@@ -1871,9 +1874,6 @@ std::shared_ptr<CrossSection> MOCDriver::homogenize(
 
       j++;
     }
-
-    // Reconstruct total xs from absorption and scattering
-    Et(g) = Ea(g) + xt::sum(xt::view(Es, 0, g, xt::all()))();
   }
 
   return std::make_shared<CrossSection>(Et, Dtr, Ea, Es, Ef, vEf, chi);

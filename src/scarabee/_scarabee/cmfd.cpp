@@ -250,7 +250,7 @@ std::size_t CMFD::tile_to_indx(const std::size_t& i,
   return j * nx_ + i;
 }
 
-std::array<std::size_t, 2> CMFD::indx_to_tile(std::size_t cell_index) {
+std::array<std::size_t, 2> CMFD::indx_to_tile(std::size_t cell_index) const {
   std::array<std::size_t, 2> tile;
   tile[0] = cell_index % nx_;
   tile[1] = (cell_index - tile[0]) / nx_;
@@ -441,21 +441,14 @@ std::size_t CMFD::get_y_pos_surf(const std::size_t i,
   return get_y_neg_surf(i, j) + 1;
 }
 
-void CMFD::tally_current(double aflx, const Direction& u, std::size_t G,
-                         const CMFDSurfaceCrossing& surf) {
-  if (G >= surface_currents_.shape()[0]) {
-    auto mssg = "Group index out of range.";
-    spdlog::error(mssg);
-    throw ScarabeeException(mssg);
-  }
-
-  const auto tile = indx_to_tile(surf.cell_index);
+htl::static_vector<std::size_t, 4> CMFD::get_surface_indices(
+    const CMFDSurfaceCrossing& surf) const {
+  const auto tile = this->indx_to_tile(surf.cell_index);
   std::size_t i = tile[0];
   std::size_t j = tile[1];
 
-  // Get surface index(s) from CMFDSurfaceCrossing
   htl::static_vector<std::size_t, 4> surf_indexes;
-  bool is_corner = false;
+
   if (surf.crossing == CMFDSurfaceCrossing::Type::XN) {
     surf_indexes.push_back(get_x_neg_surf(i, j));
   } else if (surf.crossing == CMFDSurfaceCrossing::Type::XP) {
@@ -465,7 +458,6 @@ void CMFD::tally_current(double aflx, const Direction& u, std::size_t G,
   } else if (surf.crossing == CMFDSurfaceCrossing::Type::YP) {
     surf_indexes.push_back(get_y_pos_surf(i, j));
   } else if (surf.crossing == CMFDSurfaceCrossing::Type::I) {
-    is_corner = true;
     surf_indexes.push_back(get_x_pos_surf(i, j));
     surf_indexes.push_back(get_y_pos_surf(i, j));
     if (i + 1 < nx_) {
@@ -475,7 +467,6 @@ void CMFD::tally_current(double aflx, const Direction& u, std::size_t G,
       surf_indexes.push_back(get_x_pos_surf(i, j + 1));
     }
   } else if (surf.crossing == CMFDSurfaceCrossing::Type::IV) {
-    is_corner = true;
     surf_indexes.push_back(get_x_pos_surf(i, j));
     surf_indexes.push_back(get_y_neg_surf(i, j));
     if (i + 1 < nx_) {
@@ -485,7 +476,6 @@ void CMFD::tally_current(double aflx, const Direction& u, std::size_t G,
       surf_indexes.push_back(get_x_pos_surf(i, j - 1));
     }
   } else if (surf.crossing == CMFDSurfaceCrossing::Type::III) {
-    is_corner = true;
     surf_indexes.push_back(get_x_neg_surf(i, j));
     surf_indexes.push_back(get_y_neg_surf(i, j));
     if (i != 0) {
@@ -495,7 +485,6 @@ void CMFD::tally_current(double aflx, const Direction& u, std::size_t G,
       surf_indexes.push_back(get_x_neg_surf(i, j - 1));
     }
   } else if (surf.crossing == CMFDSurfaceCrossing::Type::II) {
-    is_corner = true;
     surf_indexes.push_back(get_x_neg_surf(i, j));
     surf_indexes.push_back(get_y_pos_surf(i, j));
     if (i != 0) {
@@ -506,19 +495,31 @@ void CMFD::tally_current(double aflx, const Direction& u, std::size_t G,
     }
   }
 
+  return surf_indexes;
+}
+
+void CMFD::tally_current(double aflx, const Direction& u, std::size_t G,
+                         const CMFDSurfaceCrossing& surf) {
+  if (G >= surface_currents_.shape()[0]) {
+    auto mssg = "Group index out of range.";
+    spdlog::error(mssg);
+    throw ScarabeeException(mssg);
+  }
+
+  // Get surface index(s) from CMFDSurfaceCrossing
+  htl::static_vector<std::size_t, 4> surf_indexes = get_surface_indices(surf);
+
+  const bool is_corner = surf_indexes.size() > 1;
   if (is_corner) {
     // Split flux between two surfaces evenly
     aflx *= 0.5;
   }
 
   for (auto si : surf_indexes) {
-    if (si < nx_surfs_) {
+    const double score = std::copysign(aflx, si < nx_surfs_ ? u.x() : u.y());
+
 #pragma omp atomic
-      surface_currents_(G, si) += std::copysign(aflx, u.x());
-    } else {
-#pragma omp atomic
-      surface_currents_(G, si) += std::copysign(aflx, u.y());
-    }
+    surface_currents_(G, si) += score;
   }
 }
 
@@ -726,6 +727,13 @@ double CMFD::calc_neutron_balance_residual_cmfd(const std::size_t i,
   // Now compute the removal reaction rate
   const double tot_reac_rate = Et_(g, i, j) * this->flux(i, j, g);
 
+  spdlog::debug(
+      "CMFD Balance (i={}, j={}, g={}): Jxn = {: .6E}, Jxp = {: .6E}, Jyn = {: "
+      ".6E}, Jyp = {: .6E}, leakage = {: .6E}, total = {:.6E}, scatter = "
+      "{:.6E}, fission = {:.6E}",
+      i, j, g, J_xn, J_xp, J_yn, J_yp, leak_rate, tot_reac_rate, scat_source,
+      fiss_source);
+
   // Compute the residual of the balance equation
   return leak_rate + tot_reac_rate - (scat_source + fiss_source);
 }
@@ -762,6 +770,13 @@ double CMFD::calc_neutron_balance_residual_moc(const std::size_t i,
 
   // Now compute the removal reaction rate
   const double tot_reac_rate = Et_(g, i, j) * flux_.at(g, i, j);
+
+  spdlog::debug(
+      "MOC  Balance (i={}, j={}, g={}): Jxn = {: .6E}, Jxp = {: .6E}, Jyn = {: "
+      ".6E}, Jyp = {: .6E}, leakage = {: .6E}, total = {:.6E}, scatter = "
+      "{:.6E}, fission = {:.6E}",
+      i, j, g, J_xn, J_xp, J_yn, J_yp, leak_rate, tot_reac_rate, scat_source,
+      fiss_source);
 
   // Compute the residual of the balance equation
   return leak_rate + tot_reac_rate - (scat_source + fiss_source);
@@ -949,7 +964,7 @@ void CMFD::optimize_diffusion_coef(double& D, const double dx,
 
   if (EtDx < 1.) {
     return;
-  } else if (EtDx < 14 && EtDx >= 1) {
+  } else if (EtDx < 14. && EtDx >= 1.) {
     const double EtDx2 = EtDx * EtDx;
     const double EtDx3 = EtDx2 * EtDx;
     const double EtDx4 = EtDx3 * EtDx;
@@ -1227,7 +1242,7 @@ void CMFD::power_iteration(double keff) {
   // Create a solver for the problem
   Eigen::BiCGSTAB<Eigen::SparseMatrix<double>> solver;
   solver.compute(M_);
-  solver.setTolerance(1.E-10);
+  solver.setTolerance(1.E-60);
   if (solver.info() != Eigen::Success) {
     std::stringstream mssg;
     mssg << "Could not initialize CMFD iterative solver";
@@ -1282,7 +1297,7 @@ void CMFD::fixed_source_solve() {
   // Create a solver for the problem
   Eigen::BiCGSTAB<Eigen::SparseMatrix<double>> solver;
   solver.compute(L);
-  solver.setTolerance(1.E-10);
+  solver.setTolerance(1.E-60);
 
   if (solver.info() != Eigen::Success) {
     std::stringstream mssg;
@@ -1375,10 +1390,8 @@ void CMFD::update_moc_fluxes(MOCDriver& moc) {
 
       // Update scalar flux in each MOC FSR
       for (const auto f : fsrs) {
-        for (std::size_t lj = 0; lj < moc.num_spherical_harmonics(); lj++) {
-          const double new_flx = moc.flux(f, g, lj) * flx_ratio;
-          moc.set_flux(f, g, new_flx, lj);
-        }
+        const double new_flx = moc.flux(f, g, 0) * flx_ratio;
+        moc.set_flux(f, g, new_flx, 0);
       }
     }
   }

@@ -8,6 +8,7 @@
 #include <data/diffusion_cross_section.hpp>
 #include <utils/simulation_mode.hpp>
 
+#include <htl/static_vector.hpp>
 #include <xtensor/containers/xtensor.hpp>
 #include <Eigen/Sparse>
 
@@ -72,7 +73,7 @@ class CMFD {
   std::size_t tile_to_indx(const std::array<std::size_t, 2>& tile) const;
   std::size_t tile_to_indx(const std::size_t& i, const std::size_t& j) const;
 
-  std::array<std::size_t, 2> indx_to_tile(std::size_t cell_index);
+  std::array<std::size_t, 2> indx_to_tile(std::size_t cell_index) const;
 
   CMFDSurfaceCrossing get_surface(const Vector& r, const Direction& u) const;
 
@@ -91,6 +92,9 @@ class CMFD {
   std::size_t moc_to_cmfd_group(std::size_t g) const;
 
   const double& current(const std::size_t G, const std::size_t surface) const;
+
+  htl::static_vector<std::size_t, 4> get_surface_indices(
+      const CMFDSurfaceCrossing& surf) const;
 
   void tally_current(double aflx, const Direction& u, std::size_t G,
                      const CMFDSurfaceCrossing& surf);

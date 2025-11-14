@@ -216,7 +216,7 @@ void init_CMFD(py::module& m) {
            "u: Direction\n"
            "    Direction of the angular flux.\n"
            "g: int\n"
-           "    CMFD energy group index."
+           "    CMFD energy group index.\n"
            "surf: CMFDSurfaceCrossing\n"
            "    Information for surfaces on which the current is tallied.\n",
            py::arg("aflx"), py::arg("u"), py::arg("g"), py::arg("surf"))
