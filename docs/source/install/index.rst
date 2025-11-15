@@ -21,7 +21,7 @@ If you are not running one of these combinations, you will likely need to
 
 .. Important::
 
-  Scarabée requires that you have **Python 3.9 or later** installed. If you do
+  Scarabée requires that you have **Python 3.10 or later** installed. If you do
   not have a compatible Python version, you will not be able to install
   Scarabée.
 
@@ -47,6 +47,35 @@ compiler. On Windows, this means you should install the community version of
 Visual Studio, and on Linux you should install a recent version of g++ (you
 will have to look for online for details regarding your particular Linux
 distribution). Users on macOS likely already have a sufficient compiler.
+
+Linux Prerequisites
+-------------------
+
+If you are building on a Linux operating system, you will likely need to
+install several packages using your distribution's package manager. These
+are necessary to build the graphical plotting interface, and unfortunately
+cannot be downloaded automatically, as they are too system dependent.
+
+On Ubuntu based operating systems (which includes Debian and Linux Mint), use
+the following command
+
+.. code-block:: bash
+
+  sudo apt-get install -y python3-pip libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libomp-dev mesa-common-dev libgl1-mesa-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev xorg-dev
+
+If you are using a Fedora based operating system (including RockyOS), use the
+following command
+
+.. code-block:: bash
+
+   sudo dnf install -y python3-pip python3-devel wayland-devel libxkbcommon-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel mesa-libGL-devel
+
+Unfortunately, if you are running on a different Linux based operating system
+where these commands do not work, you will need to do a bit of research to find
+the correct packages to install which will provide the necessary dependencies.
+
+Build Process
+-------------
 
 You should start by opening a terminal (command prompt on Windows) and
 navigating to the directory where you would like to store your Scarabée source
