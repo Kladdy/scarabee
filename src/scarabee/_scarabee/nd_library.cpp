@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <optional>
 #include <sstream>
+#include "spdlog/spdlog.h"
 
 namespace scarabee {
 
@@ -261,6 +262,8 @@ NDLibrary::NDLibrary()
     throw ScarabeeException(mssg.str());
   }
 
+  spdlog::info("Loading Nuclear Data Library from {}", fname);
+
   // Open the HDF5 file
   h5_ = std::make_shared<H5::File>(fname, H5::File::ReadOnly);
 
@@ -285,6 +288,8 @@ NDLibrary::NDLibrary(const std::string& fname)
     throw ScarabeeException(mssg.str());
   }
 
+  spdlog::info("Loading Nuclear Data Library from {}", fname);
+
   // Open the HDF5 file
   h5_ = std::make_shared<H5::File>(fname, H5::File::ReadOnly);
 
@@ -295,8 +300,12 @@ void NDLibrary::init() {
   // Get info on library
   if (h5_->hasAttribute("library"))
     library_ = h5_->getAttribute("library").read<std::string>();
+  else
+    library_ = "UNKNOWN";
   if (h5_->hasAttribute("group-structure"))
     group_structure_ = h5_->getAttribute("group-structure").read<std::string>();
+  else
+    group_structure_ = "UNKNOWN";
   if (h5_->hasAttribute("group-bounds"))
     group_bounds_ =
         h5_->getAttribute("group-bounds").read<std::vector<double>>();
@@ -312,6 +321,10 @@ void NDLibrary::init() {
     spdlog::error(mssg);
     throw ScarabeeException(mssg);
   }
+
+  spdlog::info("Nuclear Data Library based on {} using {} group structure",
+               library_, group_structure_);
+  spdlog::info("");
 
   if (h5_->hasAttribute("last-resonance-group")) {
     last_resonant_group_ =
