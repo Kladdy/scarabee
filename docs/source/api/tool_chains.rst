@@ -1,6 +1,9 @@
 Lattice Tool Chains
 ===================
 
+PWR Assembly Components
+-----------------------
+
 .. currentmodule:: scarabee.reseau
 
 .. autoclass:: scarabee.reseau.FuelPin
@@ -11,10 +14,19 @@ Lattice Tool Chains
 
 .. autoclass:: scarabee.reseau.CriticalLeakage
 
+.. autoclass:: scarabee.reseau.Symmetry
+
 .. autoclass:: scarabee.reseau.PWRAssembly
 
 .. autoclass:: scarabee.reseau.Reflector
 
+Equivalence Theory
+------------------
+
 .. autoclass:: scarabee.reseau.NodalFlux1D
 
 .. autoclass:: scarabee.reseau.NodalFlux2D
+
+.. autofunction:: scarabee.reseau.compute_adf_cdf_from_cmfd
+
+.. autofunction:: scarabee.reseau.compute_adf_cdf_from_moc
