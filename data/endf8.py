@@ -55,7 +55,7 @@ def process_nuclide(name: str, endf_filename: str, dilutions: list[float] | None
 # performing transport correciton calculations
 N = process_nuclide("U235", "n-092_U_235.endf")
 
-if N.chi:
+if N.chi is not None:
     chi = N.chi[:]
 else:
     raise RuntimeError("U235 fission spectrum not found")
