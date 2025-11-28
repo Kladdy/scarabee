@@ -120,7 +120,6 @@ N.process(h5, chi)  # Processed with in-scatter transport correction !
 
 # Free Gas Nuclides
 process_nuclide("H1", "n-001_H_001.endf", [1.0e10])
-process_nuclide("H1", "n-001_H_001.endf", [1.0e10])
 process_nuclide("H2", "n-001_H_002.endf", [1.0e10])
 process_nuclide("He3", "n-002_He_003.endf", [1.0e10])
 process_nuclide("He4", "n-002_He_004.endf", [1.0e10])
