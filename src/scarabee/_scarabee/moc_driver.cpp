@@ -1691,8 +1691,9 @@ void MOCDriver::segment_renormalization() {
     for (std::size_t i = 0; i < approx_vols.size(); i++) {
       if (approx_vols[i] == 0.) {
         spdlog::warn(
-            "Some of the approximate FSR areas for azimuthal angle {:} are 0.",
-            a);
+            "Some of the approximate FSR areas are zero for azimuthal angle "
+            "{:} ( {:.5E} pi ).",
+            a, angle_info_[a].phi / PI);
         break;
       }
     }
