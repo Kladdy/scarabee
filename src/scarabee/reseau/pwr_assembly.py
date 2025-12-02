@@ -152,7 +152,7 @@ class PWRAssembly:
         in range (0., 1.E-2). Default value is 1.E-5.
     moc_track_spacing : float
         Spacing between tracks in the assembly MOC calculations. Default value
-        is 0.04 cm.
+        is 0.03 cm.
     moc_num_angles : int
         Number of azimuthal angles in the assembly MOC calculations. Default
         value is 32.
@@ -464,7 +464,7 @@ class PWRAssembly:
                 self.grid_sleeve.size * [1.0e10], self._ndl
             )
 
-        self._moc_track_spacing: float = 0.04
+        self._moc_track_spacing: float = 0.03
         self._moc_num_angles: int = 64
         # Default polar quadrature chosen later based on _anisotropic
         self._moc_polar_quadrature: Optional[PolarQuadrature] = None 
