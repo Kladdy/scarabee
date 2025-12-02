@@ -205,7 +205,8 @@ void init_Material(py::module& m) {
            "-------\n"
            "CrossSection\n"
            "             The macroscopic self-shielded cross section.",
-           py::arg("C"), py::arg("Ee"), py::arg("ndl"), py::arg("max_l") = 1)
+           py::arg("C"), py::arg("Ee"), py::arg("ndl"),
+           py::arg("max_l") = std::nullopt)
 
       .def("roman_xs", &Material::roman_xs,
            "Computes the macroscopic material cross section, self-shielded "
@@ -225,7 +226,8 @@ void init_Material(py::module& m) {
            "-------\n"
            "CrossSection\n"
            "             The macroscopic self-shielded cross section.",
-           py::arg("C"), py::arg("Ee"), py::arg("ndl"), py::arg("max_l") = 1)
+           py::arg("C"), py::arg("Ee"), py::arg("ndl"),
+           py::arg("max_l") = std::nullopt)
 
       .def("dilution_xs", &Material::dilution_xs,
            "Computes the macroscopic material cross section with nuclides "
@@ -243,7 +245,7 @@ void init_Material(py::module& m) {
            "-------\n"
            "CrossSection\n"
            "             The macroscopic cross section.",
-           py::arg("dils"), py::arg("ndl"), py::arg("max_l") = 1)
+           py::arg("dils"), py::arg("ndl"), py::arg("max_l") = std::nullopt)
 
       .def("ring_carlvik_xs", &Material::ring_carlvik_xs,
            "Computes the macroscopic material cross section, self-shielded "
@@ -269,7 +271,7 @@ void init_Material(py::module& m) {
            "CrossSection\n"
            "             The macroscopic self-shielded cross section.",
            py::arg("C"), py::arg("Rfuel"), py::arg("Rin"), py::arg("Rout"),
-           py::arg("ndl"), py::arg("max_l") = 1)
+           py::arg("ndl"), py::arg("max_l") = std::nullopt)
 
       .def("clear_all_micro_xs_data", &Material::clear_all_micro_xs_data,
            "Clears all of the previously computed microscopic cross section "

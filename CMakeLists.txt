@@ -166,6 +166,7 @@ pybind11_add_module(_scarabee src/scarabee/_scarabee/constants.cpp
                               src/scarabee/_scarabee/gauss_kronrod.cpp
                               src/scarabee/_scarabee/chebyshev.cpp
                               src/scarabee/_scarabee/math.cpp
+                              src/scarabee/_scarabee/homogenization.cpp
                               src/scarabee/_scarabee/cross_section.cpp
                               src/scarabee/_scarabee/diffusion_cross_section.cpp
                               src/scarabee/_scarabee/material.cpp
