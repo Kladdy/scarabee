@@ -326,6 +326,41 @@ N.dilutions = [1.0e10]
 N.process(h5)
 
 N = fdy.FrendyMG()
+N.name = "Ti46"
+N.endf_file = base + "n-022_Ti_046.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Ti47"
+N.endf_file = base + "n-022_Ti_047.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Ti48"
+N.endf_file = base + "n-022_Ti_048.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Ti49"
+N.endf_file = base + "n-022_Ti_049.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Ti50"
+N.endf_file = base + "n-022_Ti_050.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
 N.name = "Cr50"
 N.endf_file = base + "n-024_Cr_050.endf"
 N.label = N.name + " from ENDF/B-8.0"
@@ -460,6 +495,43 @@ N.process(h5)
 N = fdy.FrendyMG()
 N.name = "Cu65"
 N.endf_file = base + "n-029_Cu_065.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.dilutions = [1.0e10]
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Zn64"
+N.endf_file = base + "n-030_Zn_064.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Zn66"
+N.endf_file = base + "n-030_Zn_066.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Zn67"
+N.endf_file = base + "n-030_Zn_067.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.dilutions = [1.0e10]
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Zn68"
+N.endf_file = base + "n-030_Zn_068.endf"
+N.label = N.name + " from ENDF/B-8.0"
+N.temps = temps
+N.process(h5)
+
+N = fdy.FrendyMG()
+N.name = "Zn70"
+N.endf_file = base + "n-030_Zn_070.endf"
 N.label = N.name + " from ENDF/B-8.0"
 N.temps = temps
 N.dilutions = [1.0e10]
