@@ -8,8 +8,12 @@ import numpy as np
 from typing import Optional
 
 # Global variables initialized for computing IR parameters
-_U235_ace_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "U235_600.txt")
-_U238_ace_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "U238_600.txt")
+_U235_ace_path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "U235_600.txt"
+)
+_U238_ace_path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "U238_600.txt"
+)
 
 if not os.path.exists(_U235_ace_path):
     orig_dir = os.getcwd()
