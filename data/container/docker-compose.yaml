@@ -1,0 +1,10 @@
+services:
+  ubuntu:
+    build:
+      context: ../..
+      dockerfile: data/container/Dockerfile
+    container_name: scarabee-ubuntu
+    stdin_open: true
+    tty: true
+    volumes:
+      - ../../:/src/scarabee:Z
