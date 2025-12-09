@@ -1980,11 +1980,11 @@ class KRAMXS:
 class FrendyMG:
     def __init__(self, group_strucutre: Optional[str] = None):
         self.temps = [293.6]
-        self.dilutions = None
+        self.dilutions : list[float] | None = None
         self.pot_xs = None
-        self.endf_file = None
-        self.tsl_file = None
-        self.tsl_type = None
+        self.endf_file : str | None = None
+        self.tsl_file : str | None = None
+        self.tsl_type : str | None = None
         self.label = ""
         self.name = ""
         if group_strucutre is not None:
