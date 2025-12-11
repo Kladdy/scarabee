@@ -85,4 +85,7 @@ RUN chmod +x /tmp/install_frendy.sh \
 # Create symbolic link for frendy executable
 RUN ln -s /src/frendy/$FRENDY_VERSION/frendy/main/frendy.exe /usr/bin/frendy
 
+# Set working directory
+WORKDIR /src/scarabee/data
+
 CMD ["/bin/bash"]
