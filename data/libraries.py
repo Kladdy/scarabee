@@ -55,7 +55,7 @@ class Downlodable:
 @dataclass
 class ENDFLibrary:
     name: str
-    label: str
+    label: Literal["endf71", "endf80", "endf81", "jeff33", "jeff40"]
     base_path: Path
     neutrons_path_suffix: str
     tsl_path_suffix: str
@@ -142,7 +142,7 @@ class ENDFLibrary:
                 return f"{nuclide.Z}-{nuclide.symbol}-{nuclide.A}{metastable_suffix}.jeff33"
             case "jeff40":
                 metastable_suffix = "m" if nuclide.is_metastable else "g"
-                return f"n_{nuclide.Z}-{nuclide.symbol}-{nuclide.A}{metastable_suffix}.jeff"
+                return f"n_{nuclide.Z}-{nuclide.symbol}-{nuclide.A:03d}{metastable_suffix}.jeff"
             case _:
                 raise ValueError(f"Unknown library label: {self.label}")
             
@@ -166,7 +166,7 @@ class ENDFLibrary:
             case "jeff33":
                 return f"tsl-{tsl_material.subject}in{tsl_material.material}.jeff33"
             case "jeff40":
-                return f"tsl_{tsl_material.subject}-{tsl_material.material}.jeff"
+                return f"tsl_{tsl_material.subject}_{tsl_material.material}.jeff"
             case _:
                 raise ValueError(f"Unknown library label: {self.label}")
 
@@ -192,24 +192,37 @@ class ENDFLibrary:
                         return [
                             293.6, 350.0, 400.0, 450.0, 500.0, 550.0, 600.0, 650.0, 800.0,
                         ]
-                    case "H_in_D2O":
+                    case "D_in_D2O":
                         return [
-                            283.6, 293.6, 300.0, 323.6, 350.0, 373.6, 400.0, 423.6, 450.0,
-                            473.6, 500.0, 523.6, 550.0, 573.6, 600.0, 623.6, 650.0,
+                            293.6, 350.0, 400.0, 450.0, 500.0, 550.0, 600.0, 650.0,
                         ]
                     case _:
                         raise ValueError(f"Unknown TSL material: {tsl_material.label()} for library {self.label}")
-            case "endf80":
+            case "endf80" | "endf81":
                 match tsl_material.label():
                     case "H_in_H2O":
                         return [
                             283.6, 293.6, 300.0, 323.6, 350.0, 373.6, 400.0, 423.6, 450.0,
                             473.6, 500.0, 523.6, 550.0, 573.6, 600.0, 623.6, 650.0, 800.0,
                         ]
-                    case "H_in_D2O":
+                    case "D_in_D2O":
                         return [
                             283.6, 293.6, 300.0, 323.6, 350.0, 373.6, 400.0, 423.6, 450.0,
                             473.6, 500.0, 523.6, 550.0, 573.6, 600.0, 623.6, 650.0,
+                        ]
+                    case _:
+                        raise ValueError(f"Unknown TSL material: {tsl_material.label()} for library {self.label}")
+            case "jeff33" | "jeff40":
+                match tsl_material.label():
+                    case "H_in_H2O": # jeff40 has additional temperatures, but using only a subset of these in order to be consistent with jeff33
+                        return [
+                            293.6, 323.6, 373.6, 423.6, 473.6, 523.6, 573.6, 623.6, 647.2, 
+                            800.0, 1000.0
+                        ]
+                    case "D_in_D2O":
+                        return [
+                            283.6, 293.6, 300.0, 323.6, 350.0, 373.6, 400.0, 423.6, 450.0,
+                            473.6, 500.0, 523.6, 550.0, 573.6, 600.0, 623.6, 650.0
                         ]
                     case _:
                         raise ValueError(f"Unknown TSL material: {tsl_material.label()} for library {self.label}")
@@ -271,7 +284,7 @@ jeff33_library = ENDFLibrary(
     label="jeff33",
     base_path=base_endf_path / "jeff33",
     neutrons_path_suffix="JEFF33-n/endf6",
-    tsl_path_suffix="JEFF33-tsl/endf6",
+    tsl_path_suffix="JEFF33-tsl/JEFF33-tsl",
     downloadables=[
         Downlodable(
             url="https://www.oecd-nea.org/dbdata/jeff/jeff33/downloads/JEFF33-n.tgz",

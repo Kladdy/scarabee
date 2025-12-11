@@ -8,7 +8,7 @@ import h5py
 
 ####################################################################################
 ##                         MODIFY LINES IN THIS BLOCK
-library = libraries.endf71_library # Change to desired library
+library = libraries.endf80_library # Change to desired library
 library.download_library_if_not_exists()
 # or, define custom library:
 # library = libraries.ENDFLibrary(
@@ -77,16 +77,14 @@ def process_tsl_material(tsl_material: ThermalScatteringMaterial, nuclide: Nucli
     N.process(h5, chi)
     return N
 
-# # We process U235 first so that we can steal its fission spectrum for
-# # performing transport correciton calculations
-# N = process_nuclide(Nuclide("U", 92, 235))
+# We process U235 first so that we can steal its fission spectrum for
+# performing transport correciton calculations
+N = process_nuclide(Nuclide("U", 92, 235))
 
-# if N.chi is not None:
-#     chi = N.chi[:]
-# else:
-#     raise RuntimeError("U235 fission spectrum not found")
-
-chi=None
+if N.chi is not None:
+    chi = N.chi[:]
+else:
+    raise RuntimeError("U235 fission spectrum not found")
 
 # Process TSL based evaluations
 process_tsl_material(
@@ -97,7 +95,7 @@ process_tsl_material(
 )
 
 process_tsl_material(
-    ThermalScatteringMaterial("H", "D2O", "dd2o"),
+    ThermalScatteringMaterial("D", "D2O", "dd2o"),
     Nuclide("H", 1, 2),
     chi=chi,
     dilutions=[1.0e10],
@@ -361,6 +359,7 @@ nuclides = [
     Nuclide("Cm", 96, 246),
 ]
 
+# TODO: Add parameterization
 [process_nuclide(nuclide) for nuclide in nuclides]
 
 h5.close()
