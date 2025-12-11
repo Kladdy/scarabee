@@ -12,3 +12,6 @@ data/tools/U238_600.dir
 docs/_build
 _scarabee.*
 *imgui.ini
+
+# Data files
+data/endf_libraries
