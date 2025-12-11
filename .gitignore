@@ -15,3 +15,4 @@ _scarabee.*
 
 # Data files
 data/endf_libraries
+data/*.log
