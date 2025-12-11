@@ -34,6 +34,18 @@ class Nuclide:
 
 @dataclass
 class ThermalScatteringMaterial:
+    """
+    Thermal scattering material dataclass.
+
+    Attributes
+    ----------
+    subject : str
+        Scattering atom or species in the material (e.g. 'H', 'D').
+    material : str
+        Host material name containing the subject (e.g. 'H2O', 'D2O', 'graphite').
+    type : str
+        Description of the TSL, e.g. 'hh2o' or 'dd2o'
+    """
     subject: str
     material: str
     type: str
