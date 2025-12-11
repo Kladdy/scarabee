@@ -4,10 +4,20 @@ from libraries import Nuclide, ThermalScatteringMaterial
 import tools.frendy as fdy
 import tools.depletion_chain as dc
 import h5py
+import logging
+
+# Set up logging to file and console
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("generate_nuclear_data.log"),
+                        logging.StreamHandler()
+                    ])
 
 
 ####################################################################################
 ##                         MODIFY LINES IN THIS BLOCK
+
 library = libraries.endf80_library # Change to desired library
 library.download_library_if_not_exists()
 # or, define custom library:
@@ -51,35 +61,58 @@ h5.attrs["library"] = library.name
 
 # Define a helper function to process nuclides
 def process_nuclide(nuclide: Nuclide, dilutions: list[float] = [1.0e10]):
+    endf_file_path = library.neutrons_path / library.get_filename_of_nuclide(nuclide)
+    if not endf_file_path.exists():
+        logging.warning(f"ENDF file for {nuclide.label()} not found in library (looked for it at '{endf_file_path}')")
+        return
+
     N = fdy.FrendyMG()
     N.name = nuclide.label()
-    N.endf_file = str(library.neutrons_path / library.get_filename_of_nuclide(nuclide))
+    N.endf_file = str(endf_file_path)
     N.label = f"{nuclide.label()} from {library.name}"
     N.temps = temps
     if dilutions:
         N.dilutions = dilutions
     N.process(h5)
+
+    logging.info(f"Processed nuclide: {nuclide.label()}")
+
     return N
 
 # Define a helper function to process TSL materials
 def process_tsl_material(tsl_material: ThermalScatteringMaterial, nuclide: Nuclide, chi: np.ndarray | None, dilutions: list[float] = [1.0e10]):
     tsl_temps = library.get_tsl_temperatures(tsl_material)
     
+    endf_file_path = library.neutrons_path / library.get_filename_of_nuclide(nuclide)
+    if not endf_file_path.exists():
+        logging.warning(f"ENDF file for {nuclide.label()} not found in library (looked for it at '{endf_file_path}')")
+        return
+    tsl_endf_file_path = library.tsl_path / library.get_filename_of_tsl_material(tsl_material)
+    if not tsl_endf_file_path.exists():
+        logging.warning(f"ENDF TSL file for {tsl_material.label()} not found in library (looked for it at '{tsl_endf_file_path}')")
+        return
+
     N = fdy.FrendyMG()
     N.name = tsl_material.label()
-    N.endf_file = str(library.neutrons_path / library.get_filename_of_nuclide(nuclide))
-    N.tsl_file = str(library.tsl_path / library.get_filename_of_tsl_material(tsl_material))
-    N.tsl_type = tsl_material.subject.lower()
+    N.endf_file = str(endf_file_path)
+    N.tsl_file = str(tsl_endf_file_path)
+    N.tsl_type = tsl_material.type.lower()
     N.label = f"{tsl_material.label()} from {library.name}"
     N.temps = tsl_temps
     if dilutions:
         N.dilutions = dilutions
     N.process(h5, chi)
+
+    logging.info(f"Processed TSL material: {tsl_material.label()} for nuclide {nuclide.label()}")
+
     return N
 
 # We process U235 first so that we can steal its fission spectrum for
 # performing transport correciton calculations
 N = process_nuclide(Nuclide("U", 92, 235))
+
+if not N:
+    raise RuntimeError("U235 data could not be processed")
 
 if N.chi is not None:
     chi = N.chi[:]
