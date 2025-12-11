@@ -11,11 +11,10 @@ docker exec -it scarabee-ubuntu /bin/bash
 The first command takes a while to complete (in the order of tens of minutes). Once in the container, run:
 
 ```shell
-cd /data
-python3 endf8.py
+python3 generate.py
 ```
 
-The second command takes a while to complete (in the order of days)
+The command takes a while to complete (in the order of days).
 
 If a crash occurs, it might be due to RAM limitations. 
 Try increasing the RAM available to container runtime.
