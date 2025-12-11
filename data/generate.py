@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import libraries
 from libraries import Nuclide, ThermalScatteringMaterial
@@ -23,8 +24,8 @@ library.download_library_if_not_exists()
 # or, define custom library:
 # library = libraries.ENDFLibrary(
 #     name="Custom Library",
-#     label="custom_label",
-#     base_path=libraries.base_endf_path / "custom_library",
+#     label="custom_label", # one of "endf71", "endf80", "endf81", "jeff33", "jeff40"
+#     base_path=Path("/path/to/library"),
 #     neutrons_path_suffix="neutrons",
 #     tsl_path_suffix="thermal_scatt",
 # )
