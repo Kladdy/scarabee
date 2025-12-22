@@ -47,7 +47,7 @@ class CriticalitySpectrum {
 class P1CriticalitySpectrum : public CriticalitySpectrum {
  public:
   P1CriticalitySpectrum(std::shared_ptr<CrossSection> xs);
-  P1CriticalitySpectrum(std::shared_ptr<CrossSection> xs, double B);
+  P1CriticalitySpectrum(std::shared_ptr<CrossSection> xs, double B2);
 
  private:
   friend class cereal::access;
@@ -61,7 +61,7 @@ class P1CriticalitySpectrum : public CriticalitySpectrum {
 class B1CriticalitySpectrum : public CriticalitySpectrum {
  public:
   B1CriticalitySpectrum(std::shared_ptr<CrossSection> xs);
-  B1CriticalitySpectrum(std::shared_ptr<CrossSection> xs, double B);
+  B1CriticalitySpectrum(std::shared_ptr<CrossSection> xs, double B2);
 
  private:
   friend class cereal::access;

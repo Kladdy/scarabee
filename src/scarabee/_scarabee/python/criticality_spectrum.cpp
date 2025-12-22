@@ -56,9 +56,9 @@ void init_CriticalitySpectrum(py::module& m) {
            "----------\n"
            "xs : CrossSection\n"
            "     Homogenized set of cross sections for the system.\n"
-           "B : float\n"
+           "B2 : float\n"
            "    Desired value of the buckling.\n\n",
-           py::arg("xs"), py::arg("B"));
+           py::arg("xs"), py::arg("B2"));
 
   py::class_<B1CriticalitySpectrum, CriticalitySpectrum>(
       m, "B1CriticalitySpectrum")
@@ -78,7 +78,7 @@ void init_CriticalitySpectrum(py::module& m) {
            "----------\n"
            "xs : CrossSection\n"
            "     Homogenized set of cross sections for the system.\n"
-           "B : float\n"
+           "B2 : float\n"
            "    Desired value of the buckling.\n\n",
-           py::arg("xs"), py::arg("B"));
+           py::arg("xs"), py::arg("B2"));
 }

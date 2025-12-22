@@ -157,7 +157,8 @@ P1CriticalitySpectrum::P1CriticalitySpectrum(std::shared_ptr<CrossSection> xs) {
 }
 
 P1CriticalitySpectrum::P1CriticalitySpectrum(std::shared_ptr<CrossSection> xs,
-                                             double B) {
+                                             double B2) {
+  B2_ = B2;
   const std::size_t NG = xs->ngroups();
 
   // For P1 approximation, alphas are all 1
@@ -178,14 +179,16 @@ P1CriticalitySpectrum::P1CriticalitySpectrum(std::shared_ptr<CrossSection> xs,
   fill_Dinvs(Dinvs, xs, a);
   const Eigen::MatrixXd D = Dinvs.inverse();
 
-  B2_ = B * B;
   fill_A(A, xs, D, B2_);
   auto A_solver = A.colPivHouseholderQr();
   flx = A_solver.solve(chi);
   k_inf_ = vEf.dot(flx);
 
+  const double sqrt_abs_B2 = std::sqrt(std::abs(B2_));
+  const double B = B2_ > 0. ? sqrt_abs_B2 : -sqrt_abs_B2;
+
   // Get the current
-  cur = std::abs(B) * D * flx;
+  cur = B * D * flx;
 
   // The output info is in the format (2,NG) where the first line has
   // the flux spectrum, and the second has the diffusion coefficients.
@@ -288,7 +291,8 @@ B1CriticalitySpectrum::B1CriticalitySpectrum(std::shared_ptr<CrossSection> xs) {
 }
 
 B1CriticalitySpectrum::B1CriticalitySpectrum(std::shared_ptr<CrossSection> xs,
-                                             double B) {
+                                             double B2) {
+  B2_ = B2;
   const std::size_t NG = xs->ngroups();
 
   xt::xtensor<double, 1> a = xt::zeros<double>({NG});
@@ -313,7 +317,6 @@ B1CriticalitySpectrum::B1CriticalitySpectrum(std::shared_ptr<CrossSection> xs,
   // Create the A matrix
   Eigen::MatrixXd A(NG, NG);
 
-  B2_ = B * B;
   fill_alphas(a, xs, B2_);
   fill_Dinvs(Dinvs, xs, a);
   D = Dinvs.inverse();
@@ -322,8 +325,11 @@ B1CriticalitySpectrum::B1CriticalitySpectrum(std::shared_ptr<CrossSection> xs,
   flx = A_solver.solve(chi);
   k_inf_ = vEf.dot(flx);
 
+  const double sqrt_abs_B2 = std::sqrt(std::abs(B2_));
+  const double B = B2_ > 0. ? sqrt_abs_B2 : -sqrt_abs_B2;
+
   // Get the current
-  cur = std::abs(B) * D * flx;
+  cur = B * D * flx;
 
   // The output info is in the format (2,NG) where the first line has
   // the flux spectrum, and the second has the diffusion coefficients.
