@@ -135,6 +135,9 @@ class DiffusionData {
   const std::string& name() const { return name_; }
   void set_name(const std::string& new_name) { name_ = new_name; }
 
+  bool reflector() const { return reflector_; }
+  void set_reflector(bool r) { reflector_ = r; }
+
   const xt::xtensor<double, 2>& form_factors() const { return form_factors_; }
   void set_form_factors(const xt::xtensor<double, 2>& ff);
 
@@ -153,13 +156,14 @@ class DiffusionData {
   xt::xtensor<double, 2> adf_;  // group then ADF direction
   xt::xtensor<double, 2> cdf_;  // group then CDF direction
   std::string name_;
+  bool reflector_{false};
 
   friend class cereal::access;
   DiffusionData() {}
   template <class Archive>
   void serialize(Archive& arc) {
     arc(CEREAL_NVP(xs_), CEREAL_NVP(form_factors_), CEREAL_NVP(adf_),
-        CEREAL_NVP(cdf_), CEREAL_NVP(name_));
+        CEREAL_NVP(cdf_), CEREAL_NVP(name_), CEREAL_NVP(reflector_));
   }
 };
 

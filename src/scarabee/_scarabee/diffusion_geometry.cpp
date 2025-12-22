@@ -824,6 +824,11 @@ double DiffusionGeometry::adf_xp(std::size_t m, std::size_t g) const {
   // discontinuity, so the ADF is 1.
   if (tile_indx_m == tile_indx_n) return 1.;
 
+  // Check if we need to correct the reflector DF [1]
+  if (mat(m)->reflector() && mat(*n)->reflector() == false) {
+    return mat(m)->adf_xp(g) * mat(*n)->adf_xn(g);
+  }
+
   // We are at the boarder of a tile, so we return the mat ADF.
   return mat(m)->adf_xp(g);
 }
@@ -852,6 +857,11 @@ double DiffusionGeometry::adf_xn(std::size_t m, std::size_t g) const {
   // If the current m and neighbor n are in the same tile, we don't have a
   // discontinuity, so the ADF is 1.
   if (tile_indx_m == tile_indx_n) return 1.;
+
+  // Check if we need to correct the reflector DF [1]
+  if (mat(m)->reflector() && mat(*n)->reflector() == false) {
+    return mat(m)->adf_xn(g) * mat(*n)->adf_xp(g);
+  }
 
   // We are at the boarder of a tile, so we return the mat ADF.
   return mat(m)->adf_xn(g);
@@ -882,6 +892,11 @@ double DiffusionGeometry::adf_yp(std::size_t m, std::size_t g) const {
   // discontinuity, so the ADF is 1.
   if (tile_indx_m == tile_indx_n) return 1.;
 
+  // Check if we need to correct the reflector DF [1]
+  if (mat(m)->reflector() && mat(*n)->reflector() == false) {
+    return mat(m)->adf_yp(g) * mat(*n)->adf_yn(g);
+  }
+
   // We are at the boarder of a tile, so we return the mat ADF.
   return mat(m)->adf_yp(g);
 }
@@ -910,6 +925,11 @@ double DiffusionGeometry::adf_yn(std::size_t m, std::size_t g) const {
   // If the current m and neighbor n are in the same tile, we don't have a
   // discontinuity, so the ADF is 1.
   if (tile_indx_m == tile_indx_n) return 1.;
+
+  // Check if we need to correct the reflector DF [1]
+  if (mat(m)->reflector() && mat(*n)->reflector() == false) {
+    return mat(m)->adf_yn(g) * mat(*n)->adf_yp(g);
+  }
 
   // We are at the boarder of a tile, so we return the mat ADF.
   return mat(m)->adf_yn(g);
@@ -940,6 +960,11 @@ double DiffusionGeometry::adf_zp(std::size_t m, std::size_t g) const {
   // discontinuity, so the ADF is 1.
   if (tile_indx_m == tile_indx_n) return 1.;
 
+  // Check if we need to correct the reflector DF [1]
+  if (mat(m)->reflector() && mat(*n)->reflector() == false) {
+    return mat(m)->adf_zp(g) * mat(*n)->adf_zn(g);
+  }
+
   // We are at the boarder of a tile, so we return the mat ADF.
   return mat(m)->adf_zp(g);
 }
@@ -968,6 +993,11 @@ double DiffusionGeometry::adf_zn(std::size_t m, std::size_t g) const {
   // If the current m and neighbor n are in the same tile, we don't have a
   // discontinuity, so the ADF is 1.
   if (tile_indx_m == tile_indx_n) return 1.;
+
+  // Check if we need to correct the reflector DF [1]
+  if (mat(m)->reflector() && mat(*n)->reflector() == false) {
+    return mat(m)->adf_zn(g) * mat(*n)->adf_zp(g);
+  }
 
   // We are at the boarder of a tile, so we return the mat ADF.
   return mat(m)->adf_zn(g);
@@ -1369,3 +1399,7 @@ void DiffusionGeometry::fill_z_bounds() {
 }
 
 }  // namespace scarabee
+
+// [1] K. S. Smith, “Nodal diffusion methods and lattice physics data in LWR
+//     analyses: Understanding numerous subtle details,” Prog Nucl Energ,
+//     vol. 101, pp. 360–369, 2017, doi: 10.1016/j.pnucene.2017.06.013.

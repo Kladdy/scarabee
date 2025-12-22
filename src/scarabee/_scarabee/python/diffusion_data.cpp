@@ -89,6 +89,11 @@ void init_DiffusionData(py::module& m) {
       .def_property("name", &DiffusionData::name, &DiffusionData::set_name,
                     "Name of material.")
 
+      .def_property("reflector", &DiffusionData::reflector,
+                    &DiffusionData::set_reflector,
+                    "Flag to indicate the data is for a reflector, and the "
+                    "ADFs should be multiplied by the adjacent fuel ADFs.")
+
       .def_property("form_factors", &DiffusionData::form_factors,
                     &DiffusionData::set_form_factors,
                     "Assembly form-factors for power reconstruction.")
