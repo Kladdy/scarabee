@@ -1,16 +1,19 @@
-[2025-06-20 14:13:43.186] [info] Initializing Dancoff correction calculation components.
-[2025-06-20 14:13:45.665] [info] Computing Dancoff corrections for the fuel.
-[2025-06-20 14:13:46.069] [info] Computing Dancoff corrections for the cladding.
-[2025-06-20 14:13:52.284] [info] Creating quadrature
-[2025-06-20 14:13:52.284] [info] Number of azimuthal angles: 64
-[2025-06-20 14:13:52.284] [info] Maximum track spacing: 0.05 cm
-[2025-06-20 14:13:52.284] [info] Tracing tracks
-[2025-06-20 14:13:52.469] [info] Renormalizing segment lengths
-[2025-06-20 14:13:52.481] [info] Determining track connections
-[2025-06-20 14:13:52.525] [info] Time spent dawing tracks: 0.24023 s.
-[2025-06-20 14:16:44.529] [info] 
-[2025-06-20 14:16:44.529] [info] Kinf: 1.07462
-[2025-06-20 14:16:44.529] [info] 
-[2025-06-20 14:16:47.077] [info] Performing P1 criticality spectrum calculation
-[2025-06-20 14:16:47.149] [info] Kinf    : 1.07465
-[2025-06-20 14:16:47.149] [info] Buckling: 0.00129
+[2025-12-22 22:12:37.326] [info] Loading Nuclear Data Library from /home/hunter/Documents/nuclear_data/scarabee/endf8_shem281.h5
+[2025-12-22 22:12:37.327] [info] Nuclear Data Library based on ENDF/B-VIII.0 using SHEM-281 group structure
+[2025-12-22 22:12:37.327] [info] 
+[2025-12-22 22:12:37.391] [info] Initializing Dancoff correction calculation components.
+[2025-12-22 22:12:37.852] [info] Computing Dancoff corrections for the fuel.
+[2025-12-22 22:12:38.116] [info] Computing Dancoff corrections for the cladding.
+[2025-12-22 22:12:43.657] [info] Creating quadrature
+[2025-12-22 22:12:43.657] [info] Number of azimuthal angles: 64
+[2025-12-22 22:12:43.657] [info] Maximum track spacing: 0.03 cm
+[2025-12-22 22:12:43.657] [info] Tracing tracks
+[2025-12-22 22:12:44.439] [info] Renormalizing segment lengths
+[2025-12-22 22:12:44.469] [info] Determining track connections
+[2025-12-22 22:12:44.563] [info] Time spent drawing tracks: 0.90544 s.
+[2025-12-22 22:19:50.369] [info] 
+[2025-12-22 22:19:50.369] [info] Kinf: 1.07470
+[2025-12-22 22:19:50.369] [info] 
+[2025-12-22 22:19:52.525] [info] Performing P1 criticality spectrum calculation
+[2025-12-22 22:19:52.593] [info] Kinf    : 1.07470
+[2025-12-22 22:19:52.593] [info] Buckling: 0.00129

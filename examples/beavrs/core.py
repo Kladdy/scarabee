@@ -103,13 +103,10 @@ z = np.array([0.])
 
 flux = solver.flux(x, y, z)[:,:,:,0]
 
-plt.pcolormesh(y, x, flux[0,:,:], cmap='jet')
-plt.title("Group 1 Flux")
-plt.show()
-
-plt.pcolormesh(y, x, flux[1,:,:], cmap='jet')
-plt.title("Group 2 Flux")
-plt.show()
+for g in range(flux.shape[0]):
+    plt.pcolormesh(y, x, flux[g,:,:], cmap='jet')
+    plt.title(f"Group {g+1} Flux")
+    plt.show()
 
 power = solver.power(x, y, z)[:,:,0]
 plt.pcolormesh(y, x, power, cmap='jet')
