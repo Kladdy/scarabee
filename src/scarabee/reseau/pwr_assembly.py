@@ -297,7 +297,7 @@ class PWRAssembly:
 
             if assembly_pitch <= 0.0:
                 raise RuntimeError("Assembly pitch must be > 0.")
-            elif assembly_pitch <= self._assembly_pitch:
+            elif assembly_pitch < self._assembly_pitch:
                 raise RuntimeError(
                     "Provided assembly pitch is smaller than that indicated by the pitch and shape."
                 )
@@ -1937,7 +1937,7 @@ class PWRAssembly:
                 if isinstance(cell, GuideTube):
                     cell.set_fill_xs_for_depletion_step(-1, self._ndl)
 
-    def apply_leakage_model(self) -> None:
+    def apply_leakage_model(self, scilent: bool = False) -> None:
         """
         Applied the critical leakage model to the assembly, modifying the flux
         in the MOC simulation directly.
@@ -1946,35 +1946,41 @@ class PWRAssembly:
         if self.leakage_model == CriticalLeakage.NoLeakage:
             return
 
-        scarabee_log(LogLevel.Info, "")
+        if not scilent: scarabee_log(LogLevel.Info, "")
 
         self._infinite_flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
 
         homogenized_moc = self._asmbly_moc.homogenize()
 
         if self.leakage_model == CriticalLeakage.P1:
-            scarabee_log(
-                LogLevel.Info, "Performing P1 criticality spectrum calculation"
-            )
+            if not scilent:
+                scarabee_log(
+                    LogLevel.Info, "Performing P1 criticality spectrum calculation"
+                )
             critical_spectrum = P1CriticalitySpectrum(homogenized_moc)
         else:
-            scarabee_log(
-                LogLevel.Info, "Performing B1 criticality spectrum calculation"
-            )
+            if not scilent:
+                scarabee_log(
+                    LogLevel.Info, "Performing B1 criticality spectrum calculation"
+                )
             critical_spectrum = B1CriticalitySpectrum(homogenized_moc)
 
         self._asmbly_moc.apply_criticality_spectrum(critical_spectrum.flux)
-
-        scarabee_log(LogLevel.Info, "Kinf    : {:.5f}".format(critical_spectrum.k_inf))
-        scarabee_log(
-            LogLevel.Info, "Buckling: {:.5f}".format(critical_spectrum.buckling)
-        )
+        
+        if not scilent:
+            scarabee_log(LogLevel.Info, "Kinf    : {:.5f}".format(critical_spectrum.k_inf))
+            scarabee_log(
+                LogLevel.Info, "Buckling: {:.5f}".format(critical_spectrum.buckling)
+            )
 
     def apply_infinite_spectrum(self) -> None:
         """
         Undoes the critical flux spectrum adjustment to the MOCDriver.
         This permits subsequent transport calcualtions to converge much faster.
         """
+        if self.leakage_model == CriticalLeakage.NoLeakage:
+            return
+
         if self._infinite_flux_spectrum is not None and self._asmbly_moc is not None:
             self._asmbly_moc.apply_criticality_spectrum(self._infinite_flux_spectrum)
 
@@ -2170,16 +2176,25 @@ class PWRAssembly:
         flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
         return diff_xs.condense(self.condensation_scheme, flux_spectrum)
 
-    def _compute_diffusion_data(self) -> DiffusionData:
+    def _compute_diffusion_data(self, leakage_model: bool = True) -> DiffusionData:
         """
         Computes the nodal diffusion data for the assembly.
+
+        Parameters
+        ----------
+        leakage_model : bool
+            Applies the leakable model before generating diffusion data. Before
+            returning, the infinite flux spectrum is re-applied.
 
         Returns
         -------
         DiffusionData
             Few-group diffusion cross sections and discontinuity factors.
         """
+        if leakage_model: self.apply_leakage_model(scilent=True)
         diff_xs = self._compute_few_group_xs()
+        if leakage_model: self.apply_infinite_spectrum()
+
         ff = self._compute_form_factors()
 
         if (
