@@ -89,6 +89,11 @@ void init_DiffusionData(py::module& m) {
       .def_property("name", &DiffusionData::name, &DiffusionData::set_name,
                     "Name of material.")
 
+      .def_property("leakage_corrections", &DiffusionData::leakage_corrections,
+                    &DiffusionData::set_leakage_corrections,
+                    "Optional LeakageCorrection data to update cross sections "
+                    "based on in-situ leakage in nodal solver.")
+
       .def_property("reflector", &DiffusionData::reflector,
                     &DiffusionData::set_reflector,
                     "Flag to indicate the data is for a reflector, and the "

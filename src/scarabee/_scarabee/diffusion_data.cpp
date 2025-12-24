@@ -47,6 +47,19 @@ DiffusionData::DiffusionData(std::shared_ptr<DiffusionCrossSection> xs,
   this->set_cdf(cdf);
 }
 
+void DiffusionData::set_leakage_corrections(
+    const std::optional<LeakageCorrections>& lc) {
+  if (lc && lc->ngroups() != this->ngroups()) {
+    auto mssg =
+        "Number of groups in provided LeakageCorrections does not match number "
+        "of groups in DiffusionData.";
+    spdlog::error(mssg);
+    throw ScarabeeException(mssg);
+  }
+
+  leakage_corrections_ = lc;
+}
+
 void DiffusionData::set_form_factors(const xt::xtensor<double, 2>& ff) {
   for (std::size_t i = 0; i < ff.size(); i++) {
     if (ff.flat(i) < 0.) {

@@ -102,6 +102,81 @@ double NEMDiffusionDriver::calc_flux_error(
   return max_diff;
 }
 
+void NEMDiffusionDriver::fill_node_coupling_matrices(
+    std::size_t g, std::size_t m, const DiffusionCrossSection& xs,
+    const double del_x, const double del_y, const double del_z) {
+  const double D = xs.D(g);
+  const double Er = xs.Er(g);
+  const double dx = D / del_x;
+  const double dy = D / del_y;
+  const double dz = D / del_z;
+  const double lx = 1. / (Er * del_x);
+  const double ly = 1. / (Er * del_y);
+  const double lz = 1. / (Er * del_z);
+
+  // Create matrices
+  const double ax = 1. + 32. * dx + 120. * dx * lx + 960. * dx * dx * lx +
+                    840. * dx * dx * lx * lx;
+  const double ay = 1. + 32. * dy + 120. * dy * ly + 960. * dy * dy * ly +
+                    840. * dy * dy * ly * ly;
+  const double az = 1. + 32. * dz + 120. * dz * lz + 960. * dz * dz * lz +
+                    840. * dz * dz * lz * lz;
+  const double ax1 =
+      8. * dx + 60. * dx * lx + 720. * dx * dx * lx + 840. * dx * dx * lx * lx;
+  const double ay1 =
+      8. * dy + 60. * dy * ly + 720. * dy * dy * ly + 840. * dy * dy * ly * ly;
+  const double az1 =
+      8. * dz + 60. * dz * lz + 720. * dz * dz * lz + 840. * dz * dz * lz * lz;
+  const double xy = 20. * dx * ly + 840. * dx * dx * lx * ly;
+  const double xz = 20. * dx * lz + 840. * dx * dx * lx * lz;
+  const double yx = 20. * dy * lx + 840. * dy * dy * ly * lx;
+  const double yz = 20. * dy * lz + 840. * dy * dy * ly * lz;
+  const double zx = 20. * dz * lx + 840. * dz * dz * lz * lx;
+  const double zy = 20. * dz * ly + 840. * dz * dz * lz * ly;
+
+  Eigen::Matrix<double, 6, 6> A{
+      {ax, ax1, xy, xy, xz, xz}, {ax1, ax, xy, xy, xz, xz},
+      {yx, yx, ay, ay1, yz, yz}, {yx, yx, ay1, ay, yz, yz},
+      {zx, zx, zy, zy, az, az1}, {zx, zx, zy, zy, az1, az}};
+
+  const double bx = 1. - 32. * dx + 120. * dx * lx - 960. * dx * dx * lx +
+                    840. * dx * dx * lx * lx;
+  const double by = 1. - 32. * dy + 120. * dy * ly - 960. * dy * dy * ly +
+                    840. * dy * dy * ly * ly;
+  const double bz = 1. - 32. * dz + 120. * dz * lz - 960. * dz * dz * lz +
+                    840. * dz * dz * lz * lz;
+  const double bx1 =
+      -8. * dx + 60. * dx * lx - 720. * dx * dx * lx + 840. * dx * dx * lx * lx;
+  const double by1 =
+      -8. * dy + 60. * dy * ly - 720. * dy * dy * ly + 840. * dy * dy * ly * ly;
+  const double bz1 =
+      -8. * dz + 60. * dz * lz - 720. * dz * dz * lz + 840. * dz * dz * lz * lz;
+
+  Eigen::Matrix<double, 6, 6> B{
+      {bx, bx1, xy, xy, xz, xz}, {bx1, bx, xy, xy, xz, xz},
+      {yx, yx, by, by1, yz, yz}, {yx, yx, by1, by, yz, yz},
+      {zx, zx, zy, zy, bz, bz1}, {zx, zx, zy, zy, bz1, bz}};
+
+  const double cx = 20. * dx * lx * del_x + 840. * dx * dx * lx * lx * del_x;
+  const double cy = 20. * dy * ly * del_y + 840. * dy * dy * ly * ly * del_y;
+  const double cz = 20. * dz * lz * del_z + 840. * dz * dz * lz * lz * del_z;
+  const double cx1 = 60. * dx * lx * del_x;
+  const double cy1 = 60. * dy * ly * del_y;
+  const double cz1 = 60. * dz * lz * del_z;
+  const double cx2 = 140. * dx * lx * del_x;
+  const double cy2 = 140. * dy * ly * del_y;
+  const double cz2 = 140. * dz * lz * del_z;
+
+  Eigen::Matrix<double, 6, 7> C{
+      {cx, cx1, 0., 0., cx2, 0., 0.}, {cx, -cx1, 0., 0., cx2, 0., 0.},
+      {cy, 0., cy1, 0., 0., cy2, 0.}, {cy, 0., -cy1, 0., 0., cy2, 0.},
+      {cz, 0., 0., cz1, 0., 0., cz2}, {cz, 0., 0., -cz1, 0., 0., cz2}};
+
+  auto Ainvs = A.inverse();
+  Rmats_(g, m) = Ainvs * B;
+  Pmats_(g, m) = Ainvs * C;
+}
+
 void NEMDiffusionDriver::fill_coupling_matrices() {
   spdlog::info("Loading coupling matrices");
 
@@ -113,87 +188,25 @@ void NEMDiffusionDriver::fill_coupling_matrices() {
     const auto& xs = *mats_[m];
 
     for (std::size_t g = 0; g < NG_; g++) {
-      const double D = xs.D(g);
-      const double Er = xs.Er(g);
-      const double dx = D / del_x;
-      const double dy = D / del_y;
-      const double dz = D / del_z;
-      const double lx = 1. / (Er * del_x);
-      const double ly = 1. / (Er * del_y);
-      const double lz = 1. / (Er * del_z);
-
-      // Create matrices
-      const double ax = 1. + 32. * dx + 120. * dx * lx + 960. * dx * dx * lx +
-                        840. * dx * dx * lx * lx;
-      const double ay = 1. + 32. * dy + 120. * dy * ly + 960. * dy * dy * ly +
-                        840. * dy * dy * ly * ly;
-      const double az = 1. + 32. * dz + 120. * dz * lz + 960. * dz * dz * lz +
-                        840. * dz * dz * lz * lz;
-      const double ax1 = 8. * dx + 60. * dx * lx + 720. * dx * dx * lx +
-                         840. * dx * dx * lx * lx;
-      const double ay1 = 8. * dy + 60. * dy * ly + 720. * dy * dy * ly +
-                         840. * dy * dy * ly * ly;
-      const double az1 = 8. * dz + 60. * dz * lz + 720. * dz * dz * lz +
-                         840. * dz * dz * lz * lz;
-      const double xy = 20. * dx * ly + 840. * dx * dx * lx * ly;
-      const double xz = 20. * dx * lz + 840. * dx * dx * lx * lz;
-      const double yx = 20. * dy * lx + 840. * dy * dy * ly * lx;
-      const double yz = 20. * dy * lz + 840. * dy * dy * ly * lz;
-      const double zx = 20. * dz * lx + 840. * dz * dz * lz * lx;
-      const double zy = 20. * dz * ly + 840. * dz * dz * lz * ly;
-      Eigen::Matrix<double, 6, 6> A{
-          {ax, ax1, xy, xy, xz, xz}, {ax1, ax, xy, xy, xz, xz},
-          {yx, yx, ay, ay1, yz, yz}, {yx, yx, ay1, ay, yz, yz},
-          {zx, zx, zy, zy, az, az1}, {zx, zx, zy, zy, az1, az}};
-
-      const double bx = 1. - 32. * dx + 120. * dx * lx - 960. * dx * dx * lx +
-                        840. * dx * dx * lx * lx;
-      const double by = 1. - 32. * dy + 120. * dy * ly - 960. * dy * dy * ly +
-                        840. * dy * dy * ly * ly;
-      const double bz = 1. - 32. * dz + 120. * dz * lz - 960. * dz * dz * lz +
-                        840. * dz * dz * lz * lz;
-      const double bx1 = -8. * dx + 60. * dx * lx - 720. * dx * dx * lx +
-                         840. * dx * dx * lx * lx;
-      const double by1 = -8. * dy + 60. * dy * ly - 720. * dy * dy * ly +
-                         840. * dy * dy * ly * ly;
-      const double bz1 = -8. * dz + 60. * dz * lz - 720. * dz * dz * lz +
-                         840. * dz * dz * lz * lz;
-      Eigen::Matrix<double, 6, 6> B{
-          {bx, bx1, xy, xy, xz, xz}, {bx1, bx, xy, xy, xz, xz},
-          {yx, yx, by, by1, yz, yz}, {yx, yx, by1, by, yz, yz},
-          {zx, zx, zy, zy, bz, bz1}, {zx, zx, zy, zy, bz1, bz}};
-
-      const double cx =
-          20. * dx * lx * del_x + 840. * dx * dx * lx * lx * del_x;
-      const double cy =
-          20. * dy * ly * del_y + 840. * dy * dy * ly * ly * del_y;
-      const double cz =
-          20. * dz * lz * del_z + 840. * dz * dz * lz * lz * del_z;
-      const double cx1 = 60. * dx * lx * del_x;
-      const double cy1 = 60. * dy * ly * del_y;
-      const double cz1 = 60. * dz * lz * del_z;
-      const double cx2 = 140. * dx * lx * del_x;
-      const double cy2 = 140. * dy * ly * del_y;
-      const double cz2 = 140. * dz * lz * del_z;
-      Eigen::Matrix<double, 6, 7> C{
-          {cx, cx1, 0., 0., cx2, 0., 0.}, {cx, -cx1, 0., 0., cx2, 0., 0.},
-          {cy, 0., cy1, 0., 0., cy2, 0.}, {cy, 0., -cy1, 0., 0., cy2, 0.},
-          {cz, 0., 0., cz1, 0., 0., cz2}, {cz, 0., 0., -cz1, 0., 0., cz2}};
-
-      auto Ainvs = A.inverse();
-      Rmats_(g, m) = Ainvs * B;
-      Pmats_(g, m) = Ainvs * C;
+      this->fill_node_coupling_matrices(g, m, xs, del_x, del_y, del_z);
     }
   }
 }
 
 void NEMDiffusionDriver::fill_mats_adf() {
   // Save all material cross sections
+  diff_datas_.clear();
+  mats_.clear();
   mats_.reserve(NM_);
+  diff_datas_.reserve(NM_);
   for (std::size_t m = 0; m < NM_; m++) {
     const auto geom_indx = geom_inds_[m];
-    const auto& mat = geom_->mat(geom_indx)->xs();
-    mats_.push_back(mat);
+    const auto& diff_data = geom_->mat(geom_indx);
+    const auto& xs_ptr = diff_data->xs();
+    // Save hard copy of cross section that can be modified !
+    mats_.push_back(std::make_shared<DiffusionCrossSection>(*xs_ptr));
+    // We don't modify the DiffusionData !
+    diff_datas_.push_back(diff_data);
   }
 
   // Save all node ADFs
@@ -686,6 +699,97 @@ void NEMDiffusionDriver::calc_node(const std::size_t g, const std::size_t m,
   update_Jin_from_Jout(g, m);
 }
 
+double NEMDiffusionDriver::calc_avg_node_buckling(const std::size_t g,
+                                                  const std::size_t m,
+                                                  const double invs_dx,
+                                                  const double invs_dy,
+                                                  const double invs_dz) const {
+  // For the given node, grab the partial currents
+  const auto& Jin = j_in_out_(g, m, 0);
+  const auto& Jout = j_in_out_(g, m, 1);
+
+  // Obtain avg flux and second flux moments
+  const double flx_avg = flux_(g, m, MomentIndx::AVG);
+  const double flx_x2 = flux_(g, m, MomentIndx::X2);
+  const double flx_y2 = flux_(g, m, MomentIndx::Y2);
+  const double flx_z2 = flux_(g, m, MomentIndx::Z2);
+
+  // From the partial currents, compute the surface fluxes
+  const double flx_xp = 2. * (Jout(CurrentIndx::XP) + Jin(CurrentIndx::XP));
+  const double flx_xm = 2. * (Jout(CurrentIndx::XM) + Jin(CurrentIndx::XM));
+  const double flx_yp = 2. * (Jout(CurrentIndx::YP) + Jin(CurrentIndx::YP));
+  const double flx_ym = 2. * (Jout(CurrentIndx::YM) + Jin(CurrentIndx::YM));
+  const double flx_zp = 2. * (Jout(CurrentIndx::ZP) + Jin(CurrentIndx::ZP));
+  const double flx_zm = 2. * (Jout(CurrentIndx::ZM) + Jin(CurrentIndx::ZM));
+
+  // From surface fluxes, compute the a2 parameter for each direction
+  const double ax2 = flx_xp + flx_xm - 2. * flx_avg;
+  const double ay2 = flx_yp + flx_ym - 2. * flx_avg;
+  const double az2 = flx_zp + flx_zm - 2. * flx_avg;
+
+  // From second flux moments and a2s, compute a4s
+  const double ax4 = 35. * ax2 - flx_x2 * 700.;
+  const double ay4 = 35. * ay2 - flx_y2 * 700.;
+  const double az4 = 35. * az2 - flx_z2 * 700.;
+
+  // Compute average value of the laplacian within the node
+  const double avg_laplacian =
+      invs_dz * invs_dz * ((2. * az4 / 5.) + 6. * az2) +
+      invs_dy * invs_dy * ((2. * ay4 / 5.) + 6. * ay2) +
+      invs_dx * invs_dx * ((2. * ax4 / 5.) + 6. * ax2);
+
+  // Divide average laplacian by average flux to get an approximation for the
+  // buckling
+  return avg_laplacian / flx_avg;
+}
+
+void NEMDiffusionDriver::update_node_xs_and_matrices() {
+  // Go through all nodes and groups, updating the cross sections
+  for (std::size_t m = 0; m < NM_; m++) {
+    const auto& dd = *diff_datas_[m];
+    if (dd.leakage_corrections().has_value() == false || dd.reflector())
+      continue;
+    const auto& lc = dd.leakage_corrections().value();
+    const auto& sa_xs = *dd.xs();  // Single-Assembly (un-buckled) xs
+
+    const auto geom_indx = geom_inds_(m);
+    const double del_x = geom_->dx(geom_indx[0]);
+    const double del_y = geom_->dy(geom_indx[1]);
+    const double del_z = geom_->dz(geom_indx[2]);
+    const double invs_dx = 1. / del_x;
+    const double invs_dy = 1. / del_y;
+    const double invs_dz = 1. / del_z;
+    auto& xs = *mats_[m];
+
+    for (std::size_t g_in = 0; g_in < NG_; g_in++) {
+      // Compute node/group buckling, leakage, and leakage to loss ratio
+      const double B2 =
+          this->calc_avg_node_buckling(g_in, m, invs_dx, invs_dy, invs_dz);
+      const double DB2 = xs.D(g_in) * B2;
+      const double LRr = DB2 / xs.Er(g_in);
+
+      // Can now determine fractional change in each group cross section
+      const double fD = lc.D(g_in) * LRr;
+      const double fEa = lc.Ea(g_in) * LRr;
+      const double fEf = lc.Ef(g_in) * LRr;
+      const double fvEf = lc.vEf(g_in) * LRr;
+
+      // Update the cross sections
+      xs.D_(g_in) = (fD + 1.) * sa_xs.D(g_in);
+      xs.Ea_(g_in) = (fEa + 1.) * sa_xs.Ea(g_in);
+      xs.Ef_(g_in) = (fEf + 1.) * sa_xs.Ef(g_in);
+      xs.vEf_(g_in) = (fvEf + 1.) * sa_xs.vEf(g_in);
+
+      for (std::size_t g_out = g_in + 1; g_out < NG_; g_out++) {
+        const double fEs = lc.Es(g_in, g_out) * LRr;
+        xs.Es_(g_in, g_out) = (fEs + 1.) * sa_xs.Es(g_in, g_out);
+      }
+
+      this->fill_node_coupling_matrices(g_in, m, xs, del_x, del_y, del_z);
+    }
+  }
+}
+
 void NEMDiffusionDriver::inner_iteration() {
   // Iterate through all nodes
   for (std::size_t m = 0; m < NM_; m++) {
@@ -771,6 +875,14 @@ void NEMDiffusionDriver::solve() {
     spdlog::info("     max flux difference: {:.5E}", flux_diff);
     spdlog::info("     iteration time: {:.5E} s",
                  iteration_timer.elapsed_time());
+
+    if (iteration % 50 == 0) {
+      spdlog::info("-------------------------------------");
+      spdlog::info("");
+      spdlog::info("Updating cross sections and coupling matrices");
+      spdlog::info("");
+      this->update_node_xs_and_matrices();
+    }
   }
 
   solved_ = true;

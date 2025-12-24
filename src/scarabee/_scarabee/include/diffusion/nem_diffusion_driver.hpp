@@ -123,7 +123,9 @@ class NEMDiffusionDriver {
   xt::xtensor<NeighborInfo, 2> neighbors_;
 
   xt::xtensor<xt::svector<std::size_t>, 1> geom_inds_;
-  std::vector<std::shared_ptr<DiffusionCrossSection>> mats_;
+  std::vector<std::shared_ptr<DiffusionCrossSection>>
+      mats_;  // These cross sections get modified in solve !
+  std::vector<std::shared_ptr<DiffusionData>> diff_datas_;
   xt::xtensor<double, 3> adf_;  // m, group, side
 
   double keff_ = 1.;
@@ -133,6 +135,10 @@ class NEMDiffusionDriver {
 
   //----------------------------------------------------------------------------
   // PRIVATE METHODS
+  void fill_node_coupling_matrices(std::size_t g, std::size_t m,
+                                   const DiffusionCrossSection& xs,
+                                   const double del_x, const double del_y,
+                                   const double del_z);
   void fill_coupling_matrices();
   void fill_mats_adf();
   void fill_source();
@@ -146,6 +152,10 @@ class NEMDiffusionDriver {
   void calc_node(const std::size_t g, const std::size_t m, const double invs_dx,
                  const double invs_dy, const double invs_dz,
                  const DiffusionCrossSection& xs);
+  double calc_avg_node_buckling(const std::size_t g, const std::size_t m,
+                                const double invs_dx, const double invs_dy,
+                                const double invs_dz) const;
+  void update_node_xs_and_matrices();
   void inner_iteration();
 
   inline double calc_net_current(const Current& Jin, const Current& Jout,
