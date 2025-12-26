@@ -51,6 +51,9 @@ class NEMDiffusionDriver {
   double flux_tolerance() const { return flux_tol_; }
   void set_flux_tolerance(double ftol);
 
+  bool leakage_corrections() const { return leakage_corrections_; }
+  void set_leakage_corrections(bool lc) { leakage_corrections_ = lc; }
+
   double keff() const { return keff_; }
 
   double flux(double x, double y, double z, std::size_t g) const;
@@ -131,6 +134,7 @@ class NEMDiffusionDriver {
   double keff_ = 1.;
   double flux_tol_ = 1.E-5;
   double keff_tol_ = 1.E-5;
+  bool leakage_corrections_{true};
   bool solved_{false};
 
   //----------------------------------------------------------------------------

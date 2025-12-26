@@ -740,7 +740,7 @@ double NEMDiffusionDriver::calc_avg_node_buckling(const std::size_t g,
 
   // Divide average laplacian by average flux to get an approximation for the
   // buckling
-  return avg_laplacian / flx_avg;
+  return -avg_laplacian / flx_avg;
 }
 
 void NEMDiffusionDriver::update_node_xs_and_matrices() {
@@ -876,7 +876,7 @@ void NEMDiffusionDriver::solve() {
     spdlog::info("     iteration time: {:.5E} s",
                  iteration_timer.elapsed_time());
 
-    if (iteration % 50 == 0) {
+    if (leakage_corrections() && iteration % 50 == 0) {
       spdlog::info("-------------------------------------");
       spdlog::info("");
       spdlog::info("Updating cross sections and coupling matrices");

@@ -36,14 +36,16 @@ from .._scarabee import (
     CDF,
     DiffusionCrossSection,
     DiffusionData,
+    LeakageCorrections,
     set_logging_level,
     scarabee_log,
     LogLevel,
 )
-import numpy as np
 from typing import Optional, List, Tuple, Union
 import copy
 from threading import Thread
+import numpy as np
+from scipy.optimize import curve_fit
 
 class PWRAssembly:
     """
@@ -2176,24 +2178,117 @@ class PWRAssembly:
         flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
         return diff_xs.condense(self.condensation_scheme, flux_spectrum)
 
-    def _compute_diffusion_data(self, leakage_model: bool = True) -> DiffusionData:
+    def _compute_leakage_corrections(self) -> LeakageCorrections:
+        """
+        Computes the coefficients used by the nodal diffusion solver to update
+        the few-group cross sections based on the in-situ leakage in the full
+        core simulation.
+        """
+        if self.condensation_scheme is None:
+            raise RuntimeError("Energy condensation scheme not set.")
+
+        if self.leakage_model == CriticalLeakage.NoLeakage:
+            raise RuntimeError("Cannot generate leakage corrections without a leakage model.")
+        
+        # Fitting function
+        def fnc(xdata, C):
+            return C*xdata
+
+        # Number of few-groups
+        NG = len(self.condensation_scheme)
+
+        # initialize the leakage correction object
+        lc = LeakageCorrections(NG)
+        
+        # Get list of bucklings, and generate all few-group cross section sets
+        NB = 11 # Must be odd !
+        B2s = np.linspace(start=-0.01, stop=0.01, num=NB)
+        xss = []
+        homog_xs = self._asmbly_moc.homogenize()
+        diff_xs = homog_xs.diffusion_xs()
+        for B2 in B2s:
+            if self.leakage_model == CriticalLeakage.P1:
+                critical_spectrum = P1CriticalitySpectrum(homog_xs, B2)
+            else:
+                critical_spectrum = B1CriticalitySpectrum(homog_xs, B2)
+            xss.append(diff_xs.condense(self.condensation_scheme, critical_spectrum.flux))
+        xs_ref = xss[int(NB/2)]
+        
+        D = np.zeros(NB)
+        Ea = np.zeros(NB)
+        Ef = np.zeros(NB)
+        vEf = np.zeros(NB)
+        Es = np.zeros(NB)
+        for G_in in range(NG):
+            D.fill(0.)
+            Ea.fill(0.)
+            Ef.fill(0.)
+            vEf.fill(0.)
+            
+            # For this group, fill all the buckling dependent data
+            for b in range(NB):
+                D[b] = xss[b].D(G_in)
+                Ea[b] = xss[b].Ea(G_in)
+                Ef[b] = xss[b].Ef(G_in)
+                vEf[b] = xss[b].vEf(G_in)
+            
+            # Compute the leakage to loss ratio
+            LRr = (D*B2s) / (xs_ref.Er(G_in))
+            
+            # Compute fractional changes
+            f_D = (D - xs_ref.D(G_in)) / xs_ref.D(G_in)
+            f_Ea = (Ea - xs_ref.Ea(G_in)) / xs_ref.Ea(G_in)
+            f_Ef = (Ef - xs_ref.Ef(G_in)) / xs_ref.Ef(G_in)
+            f_vEf = (vEf - xs_ref.vEf(G_in)) / xs_ref.vEf(G_in)
+            
+            # Fit leakage correction coefficients
+            C_D, _   = curve_fit(fnc, LRr, f_D)
+            C_Ea, _  = curve_fit(fnc, LRr, f_Ea)
+            C_Ef, _  = curve_fit(fnc, LRr, f_Ef)
+            C_vEf, _  = curve_fit(fnc, LRr, f_vEf)
+            
+            # Store computed values
+            lc.set_D(G_in, C_D)
+            lc.set_Ea(G_in, C_Ea)
+            lc.set_Ef(G_in, C_Ef)
+            lc.set_vEf(G_in, C_vEf)
+            
+            # Do same for each down-scattering transition
+            for G_out in range(G_in+1, NG):
+                Es.fill(0.)
+                for b in range(NB):
+                    Es[b] = xss[b].Es(G_in, G_out)
+                f_Es = (Es - xs_ref.Es(G_in, G_out)) / xs_ref.Es(G_in, G_out)
+                C_Es, _  = curve_fit(fnc, LRr, f_Es)
+                lc.set_Es(G_in, G_out, C_Es)
+
+        return lc
+
+    def _compute_diffusion_data(self, leakage_corrections: bool = True) -> DiffusionData:
         """
         Computes the nodal diffusion data for the assembly.
 
         Parameters
         ----------
-        leakage_model : bool
-            Applies the leakable model before generating diffusion data. Before
-            returning, the infinite flux spectrum is re-applied.
+        leakage_corrections : bool
+            Computes the coefficients used to update the few-group cross
+            sections in the nodal diffusion solver based on the in-situ leakge.
+            If True, the cross sections for for the single assembly calculation
+            and the DiffusionData contains a LeakageCorrections. If False, the
+            leakage corrected cross sections are stored, and no
+            LeakageCorrections are provided. Default value is True.
 
         Returns
         -------
         DiffusionData
             Few-group diffusion cross sections and discontinuity factors.
         """
-        if leakage_model: self.apply_leakage_model(scilent=True)
+        if self.condensation_scheme is None:
+            raise RuntimeError("Energy condensation scheme not set.")
+
+        if not leakage_corrections: self.apply_leakage_model(scilent=True)
         diff_xs = self._compute_few_group_xs()
-        if leakage_model: self.apply_infinite_spectrum()
+        if not leakage_corrections: self.apply_infinite_spectrum()
 
         ff = self._compute_form_factors()
 
@@ -2211,7 +2306,12 @@ class PWRAssembly:
                 scarabee_log(LogLevel.Warning, mssg)
             adf, cdf = compute_adf_cdf_from_moc(self._asmbly_moc, self.condensation_scheme, self.symmetry, self.independent_quadrant)
 
-        return DiffusionData(diff_xs, ff, adf, cdf)
+        diff_data = DiffusionData(diff_xs, ff, adf, cdf)
+
+        if leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage:
+            diff_data.leakage_corrections = self._compute_leakage_corrections()
+
+        return  diff_data
 
     def _run_assembly_calculation(
         self,

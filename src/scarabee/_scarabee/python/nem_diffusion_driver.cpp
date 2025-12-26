@@ -49,6 +49,11 @@ void init_NEMDiffusionDriver(py::module& m) {
           &NEMDiffusionDriver::set_flux_tolerance,
           "Maximum relative error in the flux for problem convergence.")
 
+      .def_property("leakage_corrections",
+                    &NEMDiffusionDriver::leakage_corrections,
+                    &NEMDiffusionDriver::set_leakage_corrections,
+                    "Apply leakage corrections to update node cross sections.")
+
       .def("flux",
            py::overload_cast<double /*x*/, double /*y*/, double /*z*/,
                              std::size_t /*g*/>(&NEMDiffusionDriver::flux,
