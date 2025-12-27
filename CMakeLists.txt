@@ -5,6 +5,29 @@ project(${SKBUILD_PROJECT_NAME}
 
 option(SCARABEE_USE_OMP "Compile Scarabée with OpenMP for shared memory parallelism" ON)
 
+# Warning if the user invokes CMake directly
+if (NOT SKBUILD)
+  message(WARNING "\
+  This CMake file is meant to be executed using 'scikit-build-core'.
+  Running it directly will almost certainly not produce the desired
+  result. If you are a user trying to install this package, use the
+  command below, which will install all necessary build dependencies,
+  compile the package in an isolated environment, and then install it.
+  =====================================================================
+   $ pip install .
+  =====================================================================
+  If you are a software developer, it is usually much more efficient
+  to install the build dependencies in your environment once and use
+  the following command that avoids a costly creation of a new virtual
+  environment at every compilation:
+  =====================================================================
+   $ pip install numpy mypy pybind11 scikit-build-core[pyproject]
+   $ pip install --no-build-isolation -Ceditable.rebuild=true -Cbuild-dir=build -ve .
+  =====================================================================
+  Any subsequent changes to the C++ source will result in an
+  auto-rebuild when the package is first imported.")
+endif()
+
 # Get FetchContent for downloading dependencies
 include(FetchContent)
 
@@ -92,8 +115,8 @@ endif()
 # Get XTENSOR-PYTHON
 message(STATUS "Downloading xtensor-python v0.29.0 with Hunter's NumPy fix")
 FetchContent_Declare(xtensor-python
-  URL      https://github.com/HunterBelanger/xtensor-python/archive/b5bf5773771c70a331a7a5f0ca2e77e16243a6c3.tar.gz
-  URL_HASH MD5=7aeb5606b8373ff0cede3a6c872c434a
+  URL      https://github.com/HunterBelanger/xtensor-python/archive/3099ec2e4397013221e350be35fa4563bc0fc92d.tar.gz
+  URL_HASH MD5=c0093120deaf26a89d11c6717b7ee334
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(xtensor-python)
@@ -236,8 +259,6 @@ pybind11_add_module(_scarabee src/scarabee/_scarabee/constants.cpp
                               src/scarabee/_scarabee/python/depletion_chain.cpp
                               src/scarabee/_scarabee/python/depletion_matrix.cpp
                             )
-
-target_include_directories(_scarabee PRIVATE include)
 target_compile_features(_scarabee PRIVATE cxx_std_20)
 target_link_libraries(_scarabee PUBLIC xtl xtensor xtensor-python htl HighFive hdf5-static Eigen3::Eigen spdlog::spdlog ImApp::ImApp cereal::cereal)
 target_include_directories(_scarabee PUBLIC
