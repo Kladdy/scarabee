@@ -3,7 +3,8 @@ requires = [
   "scikit-build-core>=0.10",
   "pybind11==3.0.1",
   "mypy",
-  "numpy"
+  "numpy",
+  "scipy"
 ]
 build-backend = "scikit_build_core.build"
 
