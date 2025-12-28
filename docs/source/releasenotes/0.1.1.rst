@@ -1,0 +1,88 @@
+============================
+Scarabée 0.1.1 Release Notes
+============================
+
+-----------
+New License
+-----------
+
+The very first release of Scarabée was under the GPLv3 license. It was realized that
+this could potentially pose problems down the road if integration with other open-source
+nuclear engineering tools was desired. Additionally, it meant all Python scripts using
+Scarabée written by others would also need to be GPLv3 licensed if distributed, which
+was not the initial intent. As such, all contributors to Scarabée up until this release
+have agreed to re-license Scarabée under the LGPLv3 `(see #20)
+<https://github.com/scarabee-dev/scarabee/pull/20>`_. This means that Scarabée can be
+more easily included as a dependency in other open-source projects with a permissive
+license, and Python scripts which simply use Scarabée can be under whatever license the
+author desires.
+
+------------
+New Features
+------------
+
+- The logger now uses colors in the terminal.
+- Information about the nuclear data library is now written to the log, so that you know
+  what library was used in a simulation.
+- New Scarabée-155 group structure for better performance with MOX fuel.
+- The MOCDriver now performs tests on the angular quadrature to check for particle
+  conservation. These tests are only performed when using anisotropic scattering, as
+  that is the only case when the quadrature choice can lead to particle conservation
+  troubles. If the quadrature does not ensure particle conservation, warnings are
+  written to the log. This could indicate that CMFD might have convergence problems.
+- The MOCDriver now performs tests to ensure that all flat source regions are crossed by
+  at least one track for each azimuthal angle. If this is not the case, an error will be
+  written to the log.
+- There is now a method on the Material class to compute the cross sections
+  corresponding to an infinite homogeneous medium.
+- DiffusionData instances how have a reflector indication flag. If True, the
+  discontinuity factor on the reflector side will be multiplied by the corresponding
+  discontinuity factor on the fuel side. This is implemented in the DiffusionGeometry,
+  so it works with both the FDDiffusionDriver and the NEMDiffusionDriver, and helps
+  improve reflector performance in the full core model.
+- A new LeakageCorrections class now exists, which can be optionally added to a
+  DiffusionData. It contains the linear coefficients to update few-group diffusion cross
+  sections based on the in-situ leakage-to-removal ratio.
+- The NEMDiffusionDriver will now update the nodal cross sections every 50 iterations,
+  using the LeakageCorrections data (if present) and the node averaged buckling. This
+  requires that the DiffusionData has few-group cross sections which were not generated
+  with the leakage model (see new PWRAssembly option below). To disable this feature,
+  the NEMDiffusionDriver now has a leakage_corrections flag which can be set to False.
+- The PWRAssembly class now has a leakage_corrections flag, which if True (default
+  value), will generate DiffusionData few-group cross sections without the leakage
+  model, but will contain a LeakageCorrections instance to update the few-group cross
+  sections in the nodal solver. If False, the few-group cross sections will have the
+  leakage model applied. Because this is now the default mode, DiffusionData produced in
+  this manner for the nodal solver will no longer yield equivalent results to the
+  finite-difference solver !
+
+---------
+Bug Fixes
+---------
+
+- Documentation for various depletion components was missing from the previous release.
+- The average fuel nuclide density across an assembly in the PWRAssembly class was being
+  calculated incorrectly.
+- Improves convergence and stability of CMFD acceleration `#17
+  <https://github.com/scarabee-dev/scarabee/pull/17>`_.
+- The B1 and P1 critical spectrum methods did not correctly consider the case where a
+  desired buckling was provided. In particular, it did not allow negative bucklings, and
+  would square the user provided input.
+- The critical leakage model was not being used to generate few-group diffusion cross
+  sections. This was leading to very inaccurate full core diffusion results.
+- The average flux was not being computed correctly in the reflector region of the
+  Reflector class, causing strong in/out power tilts in the full core models.
+- It was previously possible to have a negative homogeneous flux on the vacuum boundary
+  of the reflector region in the Reflector class, which is nonphysical. To avoid this
+  problem, the diffusion coefficients are iteratively increased by a small fraction
+  until the scalar flux is positive at the vacuum boundary. The resulting diffusion
+  coefficients are used for the reflector, and the resulting homogeneous flux is used to
+  compute the discontinuity factors.
+
+------------
+Contributors
+------------
+
+- `Hunter Belanger <https://github.com/HunterBelanger>`_
+- `Parth Singh <https://github.com/2018uch0002>`_
+- `Jason Gaiardelli <https://github.com/gaiarj>`_

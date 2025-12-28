@@ -19,9 +19,15 @@ problems, better understanding reactor physics and the core design process.
    :caption: Contents:
 
    install/index
-   theory/index 
-   examples/index
    api/index 
+   examples/index
+   theory/index 
+
+.. toctree::
+   :maxdepth: 1
+
+   releasenotes/index
+
 
 Indices and tables
 ==================
