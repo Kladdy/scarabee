@@ -99,6 +99,8 @@ class NEMDiffusionDriver {
     Z2 = 6
   };
 
+  using Neighbor = DiffusionGeometry::Neighbor;
+
   using RMat = Eigen::Matrix<double, 6, 6>;
   using PMat = Eigen::Matrix<double, 6, 7>;
 
