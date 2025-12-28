@@ -191,6 +191,14 @@ class PWRAssembly:
         even if CMFD is being used. ADFs and CDFs that are generated in this
         manner are typically less accurate than those generated with the CMFD
         results. Default value is False.
+    leakage_corrections : bool
+        If True, the diffusion data contains few-group diffusion cross sections
+        which DO NOT have the critical leakage model applied. Instead, a
+        LeakageCorrections is created to update the few-group diffusion cross
+        sections based on the in-situ leakage from the nodal diffusion solver.
+        If False, the diffusion data does not have a LeakageCorrections instance
+        and the few-group cross sections DO have the critical leakage model
+        applied. Default is True.
     leakage_model : CriticalLeakage
         Model used to determine the critical leakage flux spectrum, also known
         as the fundamental mode. Default method is homogeneous P1.
@@ -479,7 +487,8 @@ class PWRAssembly:
         self._asmbly_cells = []
         self._asmbly_geom: Optional[Cartesian2D] = None
         self._asmbly_moc: Optional[MOCDriver] = None
-
+        
+        self._leakage_corrections: bool = True
         self._leakage_model: CriticalLeakage = CriticalLeakage.P1
         self._infinite_flux_spectrum = (
             None  # To reset to infinite spectrum in MOC driver
@@ -720,6 +729,14 @@ class PWRAssembly:
     @property
     def cells(self) -> List[List[Union[FuelPin, GuideTube]]]:
         return self._cells
+
+    @property
+    def leakage_corrections(self) -> bool:
+        return self._leakage_corrections
+
+    @leakage_corrections.setter
+    def leakage_corrections(self, lc: bool) -> None:
+        self._leakage_corrections = lc
 
     @property
     def leakage_model(self) -> CriticalLeakage:
@@ -2264,19 +2281,16 @@ class PWRAssembly:
 
         return lc
 
-    def _compute_diffusion_data(self, leakage_corrections: bool = True) -> DiffusionData:
+    def _compute_diffusion_data(self) -> DiffusionData:
         """
         Computes the nodal diffusion data for the assembly.
 
-        Parameters
-        ----------
-        leakage_corrections : bool
-            Computes the coefficients used to update the few-group cross
-            sections in the nodal diffusion solver based on the in-situ leakge.
-            If True, the cross sections for for the single assembly calculation
-            and the DiffusionData contains a LeakageCorrections. If False, the
-            leakage corrected cross sections are stored, and no
-            LeakageCorrections are provided. Default value is True.
+        If self.leakage_corrections is True, the coefficients used to update
+        the few-group cross sections in the nodal diffusion solver based on the
+        in-situ leakge will be computed. In this case, the few-group cross
+        sections DO NOT have the leakage model applied. Otherwise, the leakage
+        correction coefficients are not generated and the few-group cross
+        sections are leakage corrected.
 
         Returns
         -------
@@ -2286,9 +2300,9 @@ class PWRAssembly:
         if self.condensation_scheme is None:
             raise RuntimeError("Energy condensation scheme not set.")
 
-        if not leakage_corrections: self.apply_leakage_model(scilent=True)
+        if not self.leakage_corrections: self.apply_leakage_model(scilent=True)
         diff_xs = self._compute_few_group_xs()
-        if not leakage_corrections: self.apply_infinite_spectrum()
+        if not self.leakage_corrections: self.apply_infinite_spectrum()
 
         ff = self._compute_form_factors()
 
@@ -2307,8 +2321,11 @@ class PWRAssembly:
             adf, cdf = compute_adf_cdf_from_moc(self._asmbly_moc, self.condensation_scheme, self.symmetry, self.independent_quadrant)
 
         diff_data = DiffusionData(diff_xs, ff, adf, cdf)
-
-        if leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage:
+        
+        if self.leakage_corrections and self.leakage_model == CriticalLeakage.NoLeakage:
+            scarabee_log(LogLevel.Warning, "Leakage corrections were requested, but no critical leakage model is provided.")
+            scarabee_log(LogLevel.Warning, "Leakage correction coefficients WILL NOT be generated.")
+        if self.leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage:
             diff_data.leakage_corrections = self._compute_leakage_corrections()
 
         return  diff_data
