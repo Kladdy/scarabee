@@ -229,6 +229,22 @@ void init_Material(py::module& m) {
            py::arg("C"), py::arg("Ee"), py::arg("ndl"),
            py::arg("max_l") = std::nullopt)
 
+      .def("infinite_medium_xs", &Material::infinite_medium_xs,
+           "Computes the macroscopic material cross section under the "
+           "assumption of an infinite homogeneous medium.\n\n"
+           "Parameters\n"
+           "----------\n"
+           "ndl : NDLibrary\n"
+           "      Nuclear data library for cross section interpolation.\n"
+           "max_l : optional int\n"
+           "        Maximum legendre moment. If not provided, the "
+           "max_legendre_order attribute is used. Default is None.\n\n"
+           "Returns\n"
+           "-------\n"
+           "CrossSection\n"
+           "             The macroscopic cross section.",
+           py::arg("ndl"), py::arg("max_l") = std::nullopt)
+
       .def("dilution_xs", &Material::dilution_xs,
            "Computes the macroscopic material cross section with nuclides "
            "interpolated to the provided dilutions.\n\n"
