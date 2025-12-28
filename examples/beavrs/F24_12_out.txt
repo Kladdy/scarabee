@@ -1,19 +1,19 @@
-[2025-12-22 22:00:54.678] [info] Loading Nuclear Data Library from /home/hunter/Documents/nuclear_data/scarabee/endf8_shem281.h5
-[2025-12-22 22:00:54.679] [info] Nuclear Data Library based on ENDF/B-VIII.0 using SHEM-281 group structure
-[2025-12-22 22:00:54.679] [info] 
-[2025-12-22 22:00:54.735] [info] Initializing Dancoff correction calculation components.
-[2025-12-22 22:00:54.841] [info] Computing Dancoff corrections for the fuel.
-[2025-12-22 22:00:54.924] [info] Computing Dancoff corrections for the cladding.
-[2025-12-22 22:00:56.311] [info] Creating quadrature
-[2025-12-22 22:00:56.311] [info] Number of azimuthal angles: 64
-[2025-12-22 22:00:56.311] [info] Maximum track spacing: 0.03 cm
-[2025-12-22 22:00:56.311] [info] Tracing tracks
-[2025-12-22 22:00:56.437] [info] Renormalizing segment lengths
-[2025-12-22 22:00:56.444] [info] Determining track connections
-[2025-12-22 22:00:56.490] [info] Time spent drawing tracks: 0.17898 s.
-[2025-12-22 22:02:52.992] [info] 
-[2025-12-22 22:02:52.992] [info] Kinf: 1.01469
-[2025-12-22 22:02:52.992] [info] 
-[2025-12-22 22:02:53.576] [info] Performing P1 criticality spectrum calculation
-[2025-12-22 22:02:53.616] [info] Kinf    : 1.01469
-[2025-12-22 22:02:53.616] [info] Buckling: 0.00026
+[2025-12-28 19:32:21.887] [info] Loading Nuclear Data Library from /home/hunter/Documents/nuclear_data/scarabee/endf8_shem281.h5
+[2025-12-28 19:32:21.888] [info] Nuclear Data Library based on ENDF/B-VIII.0 using SHEM-281 group structure
+[2025-12-28 19:32:21.888] [info] 
+[2025-12-28 19:32:21.933] [info] Initializing Dancoff correction calculation components.
+[2025-12-28 19:32:22.045] [info] Computing Dancoff corrections for the fuel.
+[2025-12-28 19:32:22.109] [info] Computing Dancoff corrections for the cladding.
+[2025-12-28 19:32:23.598] [info] Creating quadrature
+[2025-12-28 19:32:23.598] [info] Number of azimuthal angles: 64
+[2025-12-28 19:32:23.598] [info] Maximum track spacing: 0.03 cm
+[2025-12-28 19:32:23.598] [info] Tracing tracks
+[2025-12-28 19:32:23.704] [info] Renormalizing segment lengths
+[2025-12-28 19:32:23.710] [info] Determining track connections
+[2025-12-28 19:32:23.761] [info] Time spent drawing tracks: 0.16313 s.
+[2025-12-28 19:33:48.563] [info] 
+[2025-12-28 19:33:48.563] [info] Kinf: 1.01469
+[2025-12-28 19:33:48.563] [info] 
+[2025-12-28 19:33:49.142] [info] Performing P1 criticality spectrum calculation
+[2025-12-28 19:33:49.183] [info] Kinf    : 1.01469
+[2025-12-28 19:33:49.183] [info] Buckling: 0.00026

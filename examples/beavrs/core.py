@@ -78,11 +78,12 @@ tiles = [0.    , 0.    , 0.    , 0.    , rf____, rf____, rf____, rf____, rf____,
         ]
 
 # Define assembly dimension and the number of nodes per assembly
+N = 2 # Number of nodes per axis
 dx = np.array(17*[21.50364])
-nx = 2*np.array(17*[1])
+nx = N*np.array(17*[1])
 
 dy = np.array(17*[21.50364])
-ny = 2*np.array(17*[1])
+ny = N*np.array(17*[1])
 
 dz = np.array([20.])
 nz = np.array([1])
@@ -114,9 +115,17 @@ plt.title("Homogeneous Power Distribution")
 plt.show()
 
 avg_power = solver.avg_power()
-avg_power /= np.mean(avg_power)
 plt.imshow(avg_power[:,:,0], cmap='jet')
-plt.title("Node Average Powers")
+plt.title("Node Powers")
+plt.show()
+
+asmbly_powers = np.zeros((17,17))
+for i in range(17):
+    for j in range(17):
+        asmbly_powers[i,j] = np.sum(avg_power[i*N:i*N+N, j*N:j*N+N, 0])
+asmbly_powers /= float(N*N)
+plt.imshow(asmbly_powers[:,:], cmap='jet')
+plt.title("Assembly Powers")
 plt.show()
 
 pin_power, x, y = solver.pin_power(z)
