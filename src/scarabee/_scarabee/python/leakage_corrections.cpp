@@ -41,11 +41,7 @@ void init_LeakageCorrections(py::module& m) {
            "g : int\n"
            "    Energy group index\n"
            "val : float\n"
-           "    New value of the correction coefficient\n\n"
-           "Returns\n"
-           "-------\n"
-           "float\n"
-           "  Leakage correction coefficient for group g\n\n",
+           "    New value of the correction coefficient\n\n",
            py::arg("g"), py::arg("val"))
 
       .def("Ea", &LeakageCorrections::Ea,
@@ -68,11 +64,7 @@ void init_LeakageCorrections(py::module& m) {
            "g : int\n"
            "    Energy group index\n"
            "val : float\n"
-           "    New value of the correction coefficient\n\n"
-           "Returns\n"
-           "-------\n"
-           "float\n"
-           "  Leakage correction coefficient for group g\n\n",
+           "    New value of the correction coefficient\n\n",
            py::arg("g"), py::arg("val"))
 
       .def("Ef", &LeakageCorrections::Ef,
@@ -95,11 +87,7 @@ void init_LeakageCorrections(py::module& m) {
            "g : int\n"
            "    Energy group index\n"
            "val : float\n"
-           "    New value of the correction coefficient\n\n"
-           "Returns\n"
-           "-------\n"
-           "float\n"
-           "  Leakage correction coefficient for group g\n\n",
+           "    New value of the correction coefficient\n\n",
            py::arg("g"), py::arg("val"))
 
       .def("vEf", &LeakageCorrections::vEf,
@@ -122,11 +110,7 @@ void init_LeakageCorrections(py::module& m) {
            "g : int\n"
            "    Energy group index\n"
            "val : float\n"
-           "    New value of the correction coefficient\n\n"
-           "Returns\n"
-           "-------\n"
-           "float\n"
-           "  Leakage correction coefficient for group g\n\n",
+           "    New value of the correction coefficient\n\n",
            py::arg("g"), py::arg("val"))
 
       .def("Es", &LeakageCorrections::Es,
@@ -155,10 +139,6 @@ void init_LeakageCorrections(py::module& m) {
            "g_out : int\n"
            "    Outgoing energy group index\n"
            "val : float\n"
-           "    New value of the correction coefficient\n\n"
-           "Returns\n"
-           "-------\n"
-           "float\n"
-           "  Leakage correction coefficient for group g\n\n",
+           "    New value of the correction coefficient\n\n",
            py::arg("g_in"), py::arg("g_out"), py::arg("val"));
 }

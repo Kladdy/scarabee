@@ -13,6 +13,8 @@ Materials
 .. autoclass:: scarabee.CDF
    :members:
 
+.. autoclass:: scarabee.LeakageCorrections
+
 .. autoclass:: scarabee.DiffusionData
 
 .. autoclass:: scarabee.NuclideHandle
