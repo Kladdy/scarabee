@@ -1960,6 +1960,13 @@ class PWRAssembly:
         """
         Applied the critical leakage model to the assembly, modifying the flux
         in the MOC simulation directly.
+
+        Parameters
+        ----------
+        scilent : bool
+            If True, nothing is written to the log. If False, the type of
+            spectrum calculation, as well as kinf and the buckling are logged.
+            Default value is False.
         """
         # If no leakage, just return
         if self.leakage_model == CriticalLeakage.NoLeakage:

@@ -146,7 +146,7 @@ class Reflector:
 
     def solve(self) -> None:
         """
-        Runs a 1D annular problem to generate few group cross sections for the
+        Runs a 1D problem to generate few group cross sections for the
         reflector, with the core baffle.
         """
         scarabee_log(LogLevel.Info, "Starting reflector calculation.")
@@ -346,7 +346,7 @@ class Reflector:
             1.0,
         )
         nem_solver = NEMDiffusionDriver(nem_geom)
-        nem_solver.flux_tolerance = 1.0e-10
+        nem_solver.flux_tolerance = 1.0e-6
         set_logging_level(LogLevel.Warning)
         nem_solver.solve()
         set_logging_level(LogLevel.Info)
