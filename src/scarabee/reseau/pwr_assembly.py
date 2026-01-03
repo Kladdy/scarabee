@@ -32,6 +32,7 @@ from .._scarabee import (
     YamamotoTabuchi6,
     P1CriticalitySpectrum,
     B1CriticalitySpectrum,
+    FundamentalModeCriticalitySpectrum,
     ADF,
     CDF,
     DiffusionCrossSection,
@@ -1984,12 +1985,18 @@ class PWRAssembly:
                     LogLevel.Info, "Performing P1 criticality spectrum calculation"
                 )
             critical_spectrum = P1CriticalitySpectrum(homogenized_moc)
-        else:
+        elif self.leakage_model == CriticalLeakage.B1:
             if not scilent:
                 scarabee_log(
                     LogLevel.Info, "Performing B1 criticality spectrum calculation"
                 )
             critical_spectrum = B1CriticalitySpectrum(homogenized_moc)
+        else:
+            if not scilent:
+                scarabee_log(
+                    LogLevel.Info, "Performing fundamental mode criticality spectrum calculation"
+                )
+            critical_spectrum = FundamentalModeCriticalitySpectrum(homogenized_moc)
 
         self._asmbly_moc.apply_criticality_spectrum(critical_spectrum.flux)
         
@@ -2074,41 +2081,6 @@ class PWRAssembly:
         for j in range(len(self.cells)):
             for i in range(len(self.cells[j])):
                 cell = self.cells[j][i].normalize_flux_spectrum(f)
-
-    def _compute_few_group_flux(self, r: Vector, u: Direction) -> List[float]:
-        """
-        Computes the flux in the few-group scheme at the given position
-        and direction.
-
-        Parameters
-        ----------
-        r : Vector
-            Position where the flux is evaluated.
-        u : Direction
-            Direction vector to disambiguate the position.
-
-        Returns
-        -------
-        list of float
-            Values of the few-group flux at the given position.
-
-        Raises
-        ------
-        RuntimeError
-            If the condensation_scheme attribute is not set.
-        """
-        if self.condensation_scheme is None:
-            raise RuntimeError("Energy condensation scheme not set.")
-
-        flux = [0.0 for G in range(len(self.condensation_scheme))]
-
-        for G in range(len(self.condensation_scheme)):
-            gmin, gmax = self.condensation_scheme[G][:]
-
-            for g in range(gmin, gmax + 1):
-                flux[G] += self._asmbly_moc.flux(r, u, g)
-
-        return flux
 
     def _compute_form_factors(self) -> np.ndarray:
         """
@@ -2196,10 +2168,22 @@ class PWRAssembly:
         # either method is acceptable [2]. In light of these comments, I have
         # chosen to go with Smith's recommendation of performing energy
         # condensation on the diffusion coefficients.
-
+        
+        # Get homogenized cross sections for assembly in MOC group structure
         homog_xs = self._asmbly_moc.homogenize()
+        
+        # Obtain the flux spectrum for condensation
+        if self.leakage_corrections or self.leakage_model == CriticalLeakage.NoLeakage:
+            flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
+        elif self.leakage_model == CriticalLeakage.P1:
+            flux_spectrum = P1CriticalitySpectrum(homog_xs).flux
+        elif self.leakage_model == CriticalLeakage.B1:
+            flux_spectrum = B1CriticalitySpectrum(homog_xs).flux
+        else:
+            flux_spectrum = FundamentalModeCriticalitySpectrum(homog_xs).flux
+        
+        # Convert xs to diffusion xs, then condense
         diff_xs = homog_xs.diffusion_xs()
-        flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
         return diff_xs.condense(self.condensation_scheme, flux_spectrum)
 
     def _compute_leakage_corrections(self) -> LeakageCorrections:
@@ -2232,10 +2216,12 @@ class PWRAssembly:
         diff_xs = homog_xs.diffusion_xs()
         for B2 in B2s:
             if self.leakage_model == CriticalLeakage.P1:
-                critical_spectrum = P1CriticalitySpectrum(homog_xs, B2)
+                flux_spectrum = P1CriticalitySpectrum(homog_xs, B2).flux
+            elif self.leakage_model == CriticalLeakage.B1:
+                flux_spectrum = B1CriticalitySpectrum(homog_xs, B2).flux
             else:
-                critical_spectrum = B1CriticalitySpectrum(homog_xs, B2)
-            xss.append(diff_xs.condense(self.condensation_scheme, critical_spectrum.flux))
+                flux_spectrum = FundamentalModeCriticalitySpectrum(homog_xs, B2).flux
+            xss.append(diff_xs.condense(self.condensation_scheme, flux_spectrum))
         xs_ref = xss[int(NB/2)]
         
         D = np.zeros(NB)
@@ -2307,9 +2293,7 @@ class PWRAssembly:
         if self.condensation_scheme is None:
             raise RuntimeError("Energy condensation scheme not set.")
 
-        if not self.leakage_corrections: self.apply_leakage_model(scilent=True)
         diff_xs = self._compute_few_group_xs()
-        if not self.leakage_corrections: self.apply_infinite_spectrum()
 
         ff = self._compute_form_factors()
 
@@ -2332,7 +2316,7 @@ class PWRAssembly:
         if self.leakage_corrections and self.leakage_model == CriticalLeakage.NoLeakage:
             scarabee_log(LogLevel.Warning, "Leakage corrections were requested, but no critical leakage model is provided.")
             scarabee_log(LogLevel.Warning, "Leakage correction coefficients WILL NOT be generated.")
-        if self.leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage:
+        elif self.leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage:
             diff_data.leakage_corrections = self._compute_leakage_corrections()
 
         return  diff_data

@@ -35,6 +35,11 @@ New Features
   written to the log.
 - There is now a method on the Material class to compute the cross sections
   corresponding to an infinite homogeneous medium.
+- There is a new critical spectrum solver called FundamentalModeCriticalSpectrum. This
+  solver does not compute the current or diffusion coefficients. Instead, it uses the
+  provided transport cross sections to compute the required buckling. This method aligns
+  with the approach provided in section 1.7 of the Lattice Physics Computations chapter
+  by Knott and Yamamoto from the Handbook.
 - DiffusionData instances how have a reflector indication flag. If True, the
   discontinuity factor on the reflector side will be multiplied by the corresponding
   discontinuity factor on the fuel side. This is implemented in the DiffusionGeometry,
@@ -78,6 +83,10 @@ Bug Fixes
   until the scalar flux is positive at the vacuum boundary. The resulting diffusion
   coefficients are used for the reflector, and the resulting homogeneous flux is used to
   compute the discontinuity factors.
+- The B1 critical spectrum method was not correctly implemented, and generated erroneous
+  values for the diffusion coefficients and flux spectrum.
+- The P1 and B1 critical spectrum methods could not compute the diffusion coefficients
+  when the buckling was zero.
 
 ------------
 Contributors

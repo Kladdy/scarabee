@@ -15,7 +15,12 @@ class CriticalLeakage(Enum):
   Homogeneous B1 approximation.
   """
 
-  NoLeakage = 3
+  FundamentalMode = 3
+  """
+  Fundamental mode approximation.
+  """
+
+  NoLeakage = 4
   """
   No leakage (assembly calculation is not modified).
   """
