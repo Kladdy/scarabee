@@ -20,11 +20,12 @@ on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 # -- Project information -----------------------------------------------------
 
 project = 'Scarabée'
-copyright = '2024-2025, Hunter Belanger'
+copyright = '2024-2026, Hunter Belanger'
 author = 'Hunter Belanger'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1.0'
+import scarabee
+release = scarabee.__version__
 
 # -- General configuration ---------------------------------------------------
 
