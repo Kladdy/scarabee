@@ -7,6 +7,8 @@ Geometry
 
 .. autoclass:: scarabee.Direction
 
+.. autoclass:: scarabee.Cell
+
 .. autoclass:: scarabee.EmptyCell
 
 .. autoclass:: scarabee.PinCellType

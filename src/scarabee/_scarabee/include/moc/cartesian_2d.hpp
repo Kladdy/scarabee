@@ -185,7 +185,7 @@ class Cartesian2D {
 
   std::size_t get_num_fsr_instances(std::size_t id) const;
 
-  std::set<std::size_t> get_all_fsr_ids() const;
+  std::vector<std::size_t> get_all_fsr_ids() const;
 
   void fill_fsrs(std::map<std::size_t, const FlatSourceRegion*>& fsrs) const;
 

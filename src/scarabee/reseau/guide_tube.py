@@ -286,8 +286,7 @@ class GuideTube:
         cell = SimplePinCell(radii, xs, dx, dy, pintype)
 
         # Get the FSR IDs for the regions of interest
-        cell_fsr_ids = list(cell.get_all_fsr_ids())
-        cell_fsr_ids.sort()
+        cell_fsr_ids = cell.get_all_fsr_ids()
 
         if isolated:
             self._clad_isolated_dancoff_fsr_ids.append(cell_fsr_ids[FILL_OFFSET + 1])
@@ -684,8 +683,7 @@ class GuideTube:
         cell = PinCell(radii, xss, dx, dy, pintype)
 
         # Get the FSR IDs for the regions of interest
-        cell_fsr_ids = list(cell.get_all_fsr_ids())
-        cell_fsr_ids.sort()
+        cell_fsr_ids = cell.get_all_fsr_ids()
 
         # Number of angular divisions
         NA = 8
