@@ -124,7 +124,7 @@ void DiffusionData::set_cdf(const xt::xtensor<double, 2>& cdf) {
   cdf_ = cdf;
 }
 
-void DiffusionData::rotate_clockwise() {
+DiffusionData& DiffusionData::rotate_clockwise() {
   if (form_factors_.size() > 0) {
     xt::xtensor<double, 2> temp;
 
@@ -158,9 +158,11 @@ void DiffusionData::rotate_clockwise() {
       cdf_(g, CDF::IV) = temp2;
     }
   }
+
+  return *this;
 }
 
-void DiffusionData::rotate_counterclockwise() {
+DiffusionData& DiffusionData::rotate_counterclockwise() {
   if (form_factors_.size() > 0) {
     xt::xtensor<double, 2> temp;
 
@@ -194,6 +196,56 @@ void DiffusionData::rotate_counterclockwise() {
       cdf_(g, CDF::II) = temp2;
     }
   }
+
+  return *this;
+}
+
+DiffusionData& DiffusionData::reflect_across_x_axis() {
+  // In this case, the y-side ADFs switch, and CDFs switch along y
+  if (form_factors_.size() > 0) {
+    form_factors_ = xt::flip(form_factors_, 0);
+  }
+
+  // Must now swap ADF
+  if (adf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(adf_(g, ADF::YN), adf_(g, ADF::YP));
+    }
+  }
+
+  // Finally, swap CDF
+  if (cdf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(cdf_(g, CDF::I), cdf_(g, CDF::IV));
+      std::swap(cdf_(g, CDF::II), cdf_(g, CDF::III));
+    }
+  }
+
+  return *this;
+}
+
+DiffusionData& DiffusionData::reflect_across_y_axis() {
+  // In this case, the x-side ADFs switch, and CDFs switch along x
+  if (form_factors_.size() > 0) {
+    form_factors_ = xt::flip(form_factors_, 1);
+  }
+
+  // Must now swap ADF
+  if (adf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(adf_(g, ADF::XN), adf_(g, ADF::XP));
+    }
+  }
+
+  // Finally, swap CDF
+  if (cdf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(cdf_(g, CDF::I), cdf_(g, CDF::II));
+      std::swap(cdf_(g, CDF::III), cdf_(g, CDF::IV));
+    }
+  }
+
+  return *this;
 }
 
 void DiffusionData::save(const std::string& fname) const {

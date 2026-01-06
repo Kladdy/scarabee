@@ -128,8 +128,10 @@ class DiffusionData {
     }
   }
 
-  void rotate_clockwise();
-  void rotate_counterclockwise();
+  DiffusionData& rotate_clockwise();
+  DiffusionData& rotate_counterclockwise();
+  DiffusionData& reflect_across_x_axis();
+  DiffusionData& reflect_across_y_axis();
 
   const std::string& xs_name() const { return xs_->name(); }
 

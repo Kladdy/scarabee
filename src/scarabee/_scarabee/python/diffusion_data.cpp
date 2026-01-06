@@ -268,11 +268,25 @@ void init_DiffusionData(py::module& m) {
 
       .def("rotate_clockwise", &DiffusionData::rotate_clockwise,
            "Rotates the ADFs and form factors corresponding to a 90 degree "
-           "rotation of the assembly in the clockwise direction.")
+           "rotation of the assembly in the clockwise direction.",
+           py::return_value_policy::reference_internal)
 
       .def("rotate_counterclockwise", &DiffusionData::rotate_counterclockwise,
            "Rotates the ADFs and form factors corresponding to a 90 degree "
-           "rotation of the assembly in the counter clockwise direction.")
+           "rotation of the assembly in the counter clockwise direction.",
+           py::return_value_policy::reference_internal)
+
+      .def("reflect_across_x_axis", &DiffusionData::reflect_across_x_axis,
+           "Performs a reflection of the ADFs and form factors across the x "
+           "axis. A reflection across the x axis means that the +y and -y ADFs "
+           "are swapped.",
+           py::return_value_policy::reference_internal)
+
+      .def("reflect_across_y_axis", &DiffusionData::reflect_across_y_axis,
+           "Performs a reflection of the ADFs and form factors across the y "
+           "axis. A reflection across the y axis means that the +x and -x ADFs "
+           "are swapped.",
+           py::return_value_policy::reference_internal)
 
       .def("save", &DiffusionData::save,
            "Saves the diffuion data to a binary file.\n\n"
