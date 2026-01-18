@@ -66,9 +66,6 @@ class NEMDiffusionDriver {
   xt::xtensor<double, 3> power(const xt::xtensor<double, 1>& x,
                                const xt::xtensor<double, 1>& y,
                                const xt::xtensor<double, 1>& z) const;
-  std::tuple<xt::xtensor<double, 3>, xt::xtensor<double, 1>,
-             xt::xtensor<double, 1>>
-  pin_power(const xt::xtensor<double, 1>& z) const;
   xt::xtensor<double, 3> avg_power() const;
 
   void save(const std::string& fname);

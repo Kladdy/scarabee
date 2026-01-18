@@ -107,7 +107,6 @@ class DiffusionGeometry {
   const std::vector<double> tile_dx() const { return tile_dx_; }
   const std::vector<double> tile_dy() const { return tile_dy_; }
   const std::vector<double> tile_dz() const { return tile_dz_; }
-  double form_factor(double x, double y, double z) const;
 
  private:
   xt::xarray<Tile> tiles_;
