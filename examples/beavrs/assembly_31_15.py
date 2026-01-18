@@ -4,9 +4,13 @@ from scarabee import (
     Material,
     Fraction,
     DensityUnits,
+    FormFactors,
     set_output_file,
 )
-from scarabee.reseau import FuelPin, GuideTube, BurnablePoisonRod, PWRAssembly, Symmetry
+from scarabee.reseau import FuelPin, GuideTube, BurnablePoisonRod, PWRAssembly
+from scarabee.coeur import QuadrantsTile
+import pickle
+import copy
 
 name = "F31_15II"
 
@@ -84,38 +88,111 @@ fp = FuelPin(
     clad_radius=0.45720,
 )
 
+#====================================================
+# Independent Assembly Quadrants
+#====================================================
+# Quadrant I
 cells = [
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, bp, fp, fp, bp, fp, fp, bp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, bp, fp, fp, fp, fp, fp, fp, fp, fp, fp, gt, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, bp, fp, fp, bp, fp, fp, bp, fp, fp, bp, fp, fp, gt, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, bp, fp, fp, bp, fp, fp, gt, fp, fp, bp, fp, fp, gt, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, bp, fp, fp, bp, fp, fp, bp, fp, fp, bp, fp, fp, gt, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, gt, fp, fp, fp, fp, fp, fp, fp, fp, fp, gt, fp, fp, fp],
-    [fp, fp, fp, fp, fp, gt, fp, fp, gt, fp, fp, gt, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [bp, fp, fp, bp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, gt, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [bp, fp, fp, bp, fp, fp, gt, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, bp, fp, fp, gt, fp, fp],
 ]
 
 # Define assembly
-asmbly = PWRAssembly(
+quad_I = PWRAssembly(
     pitch=1.25984,
     assembly_pitch=21.50364,
     shape=(17, 17),
-    symmetry=Symmetry.Full,
-    moderator_pressure=15.5132,
-    moderator_temp=575.0,
-    boron_ppm=975.0,
+    independent_quadrant=True,
+    moderator={'boron-ppm': 975., 'temperature': 575., 'pressure': 15.5132},
     cells=cells,
     ndl=ndl,
 )
+quad_I.solve()
 
-asmbly.solve()
-asmbly.diffusion_data.save(name + ".bin")
+q1_dd = quad_I.diffusion_data
+q1_ff = quad_I.form_factors
+
+#====================================================
+# Quadrant III - from Quadrant I
+q3_dd = copy.deepcopy(q1_dd)
+q3_ff = copy.deepcopy(q1_ff)
+
+q3_dd.rotate_clockwise().reflect_across_y_axis()
+q3_ff.rotate_clockwise().reflect_across_y_axis()
+
+#====================================================
+# Quadrant II
+cells = [
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [bp, fp, fp, bp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, bp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [bp, fp, fp, bp, fp, fp, bp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, bp, fp, fp, bp, fp, fp],
+]
+
+# Define assembly
+quad_II = PWRAssembly(
+    pitch=1.25984,
+    assembly_pitch=21.50364,
+    shape=(17, 17),
+    moderator={'boron-ppm': 975., 'temperature': 575., 'pressure': 15.5132},
+    independent_quadrant=True,
+    cells=cells,
+    ndl=ndl,
+)
+quad_II.solve()
+
+q2_dd = copy.deepcopy(quad_II.diffusion_data)
+q2_ff = copy.deepcopy(quad_II.form_factors)
+
+q2_dd.reflect_across_y_axis()
+q2_ff.reflect_across_y_axis()
+
+#====================================================
+# Quadrant IV
+cells = [
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, gt, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, gt, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [bp, fp, fp, bp, fp, fp, gt, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, bp, fp, fp, gt, fp, fp],
+]
+
+# Define assembly
+quad_IV = PWRAssembly(
+    pitch=1.25984,
+    assembly_pitch=21.50364,
+    shape=(17, 17),
+    moderator={'boron-ppm': 975., 'temperature': 575., 'pressure': 15.5132},
+    independent_quadrant=True,
+    cells=cells,
+    ndl=ndl,
+)
+quad_IV.solve()
+
+q4_dd = copy.deepcopy(quad_IV.diffusion_data)
+q4_ff = copy.deepcopy(quad_IV.form_factors)
+
+q4_dd.reflect_across_x_axis()
+q4_ff.reflect_across_x_axis()
+
+#====================================================
+# Build core tile from all quadrants
+ff = FormFactors(q1_ff, q2_ff, q3_ff, q4_ff)
+ct = QuadrantsTile(q1_dd, q2_dd, q3_dd, q4_dd, ff)
+pickle.dump(ct, open(f'{name}.pkl', 'wb'))

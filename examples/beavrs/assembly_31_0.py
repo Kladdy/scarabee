@@ -6,7 +6,9 @@ from scarabee import (
     DensityUnits,
     set_output_file,
 )
-from scarabee.reseau import FuelPin, GuideTube, PWRAssembly, Symmetry, Reflector
+from scarabee.reseau import FuelPin, GuideTube, PWRAssembly, Reflector
+from scarabee.coeur import SimpleTile
+import pickle
 
 name = "F31_0"
 
@@ -67,17 +69,14 @@ asmbly = PWRAssembly(
     pitch=1.25984,
     assembly_pitch=21.50364,
     shape=(17, 17),
-    symmetry=Symmetry.Quarter,
-    moderator_pressure=15.5132,
-    moderator_temp=575.0,
-    boron_ppm=975.0,
+    moderator={'boron-ppm': 975., 'temperature': 575., 'pressure': 15.5132, 'legendre-order': L},
     cells=cells,
     ndl=ndl,
-    moderator_legendre_order=L
 )
-
 asmbly.solve()
-asmbly.diffusion_data.save(name + ".bin")
+
+ct = SimpleTile(asmbly.diffusion_data, asmbly.form_factors)
+pickle.dump(ct, open(f'{name}.pkl', 'wb'))
 
 # Homogenize the assembly
 avg_fuel_asmbly = asmbly._asmbly_moc.homogenize()
@@ -103,4 +102,6 @@ refl = Reflector(
 )
 refl.anisotropic = True
 refl.solve()
-refl.diffusion_data.save("reflector.bin")
+
+rt = SimpleTile(refl.diffusion_data, refl.form_factors)
+pickle.dump(rt, open('reflector.pkl', 'wb'))

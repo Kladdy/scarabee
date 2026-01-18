@@ -1,22 +1,34 @@
-[2025-12-28 19:37:30.598] [info] Loading Nuclear Data Library from /home/hunter/Documents/nuclear_data/scarabee/endf8_shem281.h5
-[2025-12-28 19:37:30.599] [info] Nuclear Data Library based on ENDF/B-VIII.0 using SHEM-281 group structure
-[2025-12-28 19:37:30.600] [info] 
-[2025-12-28 19:37:30.648] [info] Initializing Dancoff correction calculation components.
-[2025-12-28 19:37:30.882] [info] Computing Dancoff corrections for the fuel.
-[2025-12-28 19:37:31.037] [info] Computing Dancoff corrections for the cladding.
-[2025-12-28 19:37:33.942] [info] Creating quadrature
-[2025-12-28 19:37:33.942] [info] Number of azimuthal angles: 64
-[2025-12-28 19:37:33.942] [info] Maximum track spacing: 0.03 cm
-[2025-12-28 19:37:33.942] [info] Tracing tracks
-[2025-12-28 19:37:34.337] [info] Renormalizing segment lengths
-[2025-12-28 19:37:34.347] [warning] Some of the approximate FSR areas are zero for azimuthal angle 14 ( 3.28639E-01 pi ).
-[2025-12-28 19:37:34.347] [warning] Some of the approximate FSR areas are zero for azimuthal angle 15 ( 4.36825E-01 pi ).
-[2025-12-28 19:37:34.348] [warning] Some of the approximate FSR areas are zero for azimuthal angle 16 ( 5.63175E-01 pi ).
-[2025-12-28 19:37:34.357] [info] Determining track connections
-[2025-12-28 19:37:34.431] [info] Time spent drawing tracks: 0.48938 s.
-[2025-12-28 19:40:47.680] [info] 
-[2025-12-28 19:40:47.680] [info] Kinf: 1.15936
-[2025-12-28 19:40:47.680] [info] 
-[2025-12-28 19:40:48.852] [info] Performing P1 criticality spectrum calculation
-[2025-12-28 19:40:48.911] [info] Kinf    : 1.15936
-[2025-12-28 19:40:48.911] [info] Buckling: 0.00271
+[2026-01-18 18:48:50.825] [info] Loading Nuclear Data Library from /home/hunter/Documents/nuclear_data/scarabee/endf8_shem281.h5
+[2026-01-18 18:48:50.825] [info] Nuclear Data Library based on ENDF/B-VIII.0 using SHEM-281 group structure
+[2026-01-18 18:48:50.871] [info] Initializing Dancoff correction calculation components.
+[2026-01-18 18:48:50.992] [info] Computing Dancoff corrections for the fuel.
+[2026-01-18 18:48:51.061] [info] Computing Dancoff corrections for the cladding.
+[2026-01-18 18:48:52.453] [info] Creating quadrature
+[2026-01-18 18:48:52.453] [info] Number of azimuthal angles: 64
+[2026-01-18 18:48:52.453] [info] Maximum track spacing: 0.03 cm
+[2026-01-18 18:48:52.453] [info] Tracing tracks
+[2026-01-18 18:48:52.560] [info] Renormalizing segment lengths
+[2026-01-18 18:48:52.566] [info] Determining track connections
+[2026-01-18 18:48:52.615] [info] Time spent drawing tracks: 0.16217 s.
+[2026-01-18 18:50:13.881] [info] 
+[2026-01-18 18:50:13.881] [info] Kinf: 1.10022
+[2026-01-18 18:50:13.881] [info] 
+[2026-01-18 18:50:14.413] [info] Performing P1 criticality spectrum calculation
+[2026-01-18 18:50:14.457] [info] Kinf    : 1.10022
+[2026-01-18 18:50:14.457] [info] Buckling: 0.00172
+[2026-01-18 18:50:15.799] [info] Initializing Dancoff correction calculation components.
+[2026-01-18 18:50:15.900] [info] Computing Dancoff corrections for the fuel.
+[2026-01-18 18:50:15.976] [info] Computing Dancoff corrections for the cladding.
+[2026-01-18 18:50:17.282] [info] Creating quadrature
+[2026-01-18 18:50:17.283] [info] Number of azimuthal angles: 64
+[2026-01-18 18:50:17.283] [info] Maximum track spacing: 0.03 cm
+[2026-01-18 18:50:17.283] [info] Tracing tracks
+[2026-01-18 18:50:17.390] [info] Renormalizing segment lengths
+[2026-01-18 18:50:17.395] [info] Determining track connections
+[2026-01-18 18:50:17.443] [info] Time spent drawing tracks: 0.16031 s.
+[2026-01-18 18:51:35.138] [info] 
+[2026-01-18 18:51:35.138] [info] Kinf: 1.21895
+[2026-01-18 18:51:35.138] [info] 
+[2026-01-18 18:51:35.655] [info] Performing P1 criticality spectrum calculation
+[2026-01-18 18:51:35.702] [info] Kinf    : 1.21895
+[2026-01-18 18:51:35.702] [info] Buckling: 0.00368

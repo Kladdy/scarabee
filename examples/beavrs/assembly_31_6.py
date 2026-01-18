@@ -4,9 +4,13 @@ from scarabee import (
     Material,
     Fraction,
     DensityUnits,
+    FormFactors,
     set_output_file,
 )
-from scarabee.reseau import FuelPin, GuideTube, BurnablePoisonRod, PWRAssembly, Symmetry
+from scarabee.reseau import FuelPin, GuideTube, BurnablePoisonRod, PWRAssembly
+from scarabee.coeur import QuadrantsTile
+import pickle
+import copy
 
 name = "F31_6R"
 
@@ -84,30 +88,77 @@ fp = FuelPin(
     clad_radius=0.45720,
 )
 
+# We need to do two independent quadrants !
+
+# Burnable poison quadrant
 cells = [
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, gt, fp, fp, gt, fp, fp, bp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, gt, fp, fp, fp, fp, fp, fp, fp, fp, fp, bp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, gt, fp, fp, gt, fp, fp, gt, fp, fp, gt, fp, fp, bp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp, fp],
-    [fp, fp, gt, fp, fp, gt, fp, fp, gt, fp, fp, gt, fp, fp, gt, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, bp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, bp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, gt, fp, fp, bp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, gt, fp, fp, gt, fp, fp],
 ]
 
-# Define assembly
-asmbly = PWRAssembly(
+quad_I = PWRAssembly(
     pitch=1.25984,
     assembly_pitch=21.50364,
     shape=(17, 17),
-    symmetry=Symmetry.Half,
-    moderator_pressure=15.5132,
-    moderator_temp=575.0,
-    boron_ppm=975.0,
+    independent_quadrant=True,
+    moderator={'boron-ppm': 975., 'temperature': 575., 'pressure': 15.5132},
     cells=cells,
     ndl=ndl,
 )
+quad_I.solve()
 
-asmbly.solve()
-asmbly.diffusion_data.save(name + ".bin")
+q1_dd = quad_I.diffusion_data
+q1_ff = quad_I.form_factors
+
+q4_dd = copy.deepcopy(q1_dd)
+q4_ff = copy.deepcopy(q1_ff)
+q4_dd.reflect_across_x_axis()
+q4_ff.reflect_across_x_axis()
+
+# Guide tube quadrant, we need to be rotate counter-clockwise
+cells = [
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, gt, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, gt, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, gt, fp, fp, gt, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [fp, fp, fp, fp, fp, fp, fp, fp, fp],
+    [gt, fp, fp, gt, fp, fp, gt, fp, fp],
+]
+
+quad_II = PWRAssembly(
+    pitch=1.25984,
+    assembly_pitch=21.50364,
+    shape=(17, 17),
+    independent_quadrant=True,
+    moderator={'boron-ppm': 975., 'temperature': 575., 'pressure': 15.5132},
+    cells=cells,
+    ndl=ndl,
+)
+quad_II.solve()
+
+q2_dd = copy.deepcopy(quad_II.diffusion_data)
+q2_ff = copy.deepcopy(quad_II.form_factors)
+q2_dd.rotate_counterclockwise()
+q2_ff.rotate_counterclockwise()
+
+
+q3_dd = copy.deepcopy(q2_dd)
+q3_ff = copy.deepcopy(q2_ff)
+q3_dd.reflect_across_x_axis()
+q3_ff.reflect_across_x_axis()
+
+#====================================================
+# Build core tile from all quadrants
+ff = FormFactors(q1_ff, q2_ff, q3_ff, q4_ff)
+ct = QuadrantsTile(q1_dd, q2_dd, q3_dd, q4_dd, ff)
+pickle.dump(ct, open(f'{name}.pkl', 'wb'))
