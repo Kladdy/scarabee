@@ -37,6 +37,7 @@ from .._scarabee import (
     CDF,
     DiffusionCrossSection,
     DiffusionData,
+    FormFactors,
     LeakageCorrections,
     set_logging_level,
     scarabee_log,
@@ -65,17 +66,26 @@ class PWRAssembly:
     cells : list of list of FuelPin or GuideTube
         All of the cells which describe the assembly geometry. Should be
         consistent with the symmetry argument.
-    boron_ppm : float
-        Moderator boron concentration in parts per million. Default is 800.
-    moderator_temp : float
-        Moderator temperature in Kelvin. Default is 570.
-    moderator_pressure : float
-        Moderator pressure in MPa. Default is 15.5.
-    moderator_legendre_order : int
-        Maximum Legendre order to load for the moderator's anisotropic
-        scattering data. Default is 1.
+    moderator : dict
+        Parameters for defining the moderator. The boron concentration,
+        temperature, and pressure will be used to call
+        :py:func:`scarabee.borated_water`. Alternatively, the `material` key
+        can be used to provide a user specified moderator material. Default is
+        an empty dictionary (all default values). Acceptable keys are:
+
+        :boron-ppm: Moderator boron concentration in parts per million. Default
+            is 800 if not provided. (float)
+        :temperature: Moderator temperature in Kelvin. Default is 570 if not
+            provided. (float)
+        :pressure: Moderator pressure in MPa. Default is 15.5 if not provided.
+            (float)
+        :legendre-order: Maximum Legendre order to load for the moderator's
+            anisotropic scattering data. Default is 1 if not provided. (int)
+        :material: User defined material which will be used directly. The
+            scarabee.borated_water function will not be called.
+            (scarabee.Material)
     symmetry : Symmetry
-        Symmetry of the fuel assembly. Default is Symmetry.Full.
+        Symmetry of the fuel assembly. Default is Symmetry.Quarter.
     independent_quadrant : bool
         If symmetry is Symmetry.Quarter and this attribute is true, the quarter
         assembly is treated as an independent assembly, with ADFs generated for
@@ -244,11 +254,8 @@ class PWRAssembly:
         pitch: float,
         ndl: NDLibrary,
         cells: List[List[Union[FuelPin, GuideTube]]],
-        boron_ppm: float = 800.0,
-        moderator_temp: float = 570.0,
-        moderator_pressure: float = 15.5,
-        moderator_legendre_order: int = 1,
-        symmetry: Symmetry = Symmetry.Full,
+        moderator: dict = {},
+        symmetry: Symmetry = Symmetry.Quarter,
         independent_quadrant: bool = False,
         linear_power: float = 42.0,
         assembly_pitch: Optional[float] = None,
@@ -360,33 +367,48 @@ class PWRAssembly:
         self._moderator_volume_fraction: float = 0.0
         self._compute_moderator_volume_fraction()
 
-        # Get moderator parameters
-        if boron_ppm < 0.0:
-            raise ValueError("Boron concentration must be >= 0.")
-        self._boron_ppm = boron_ppm
-
-        if moderator_temp <= 0.0:
-            raise ValueError("Moderator temperature must be > 0.")
-        self._moderator_temp = moderator_temp
-
-        if moderator_pressure <= 0.0:
-            raise ValueError("Moderator pressure must be > 0.")
-        self._moderator_pressure = moderator_pressure
-
-        if moderator_legendre_order < 1:
-            raise ValueError("Moderator Legendre order must be >= 1.")
-        self._moderator_legendre_order = moderator_legendre_order
+        # Get moderator parameters from the dictionary.
+        self._boron_ppm = 800.
+        self._moderator_temp = 570.
+        self._moderator_pressure = 15.5
+        self._moderator_legendre_order = 1
+        for key in moderator:
+            if key == 'boron-ppm':
+                self._boron_ppm = float(moderator[key])
+                if self._boron_ppm < 0.0:
+                    raise ValueError("Boron concentration must be >= 0.")
+            elif key == 'temperature':
+                self._moderator_temp = float(moderator[key])
+                if self._moderator_temp <= 0.0:
+                    raise ValueError("Moderator temperature must be > 0.")
+            elif key == 'pressure':
+                self._moderator_pressure = float(moderator[key])
+                if self._moderator_pressure <= 0.0:
+                    raise ValueError("Moderator pressure must be > 0.")
+            elif key == 'legendre-order':
+                self._moderator_legendre_order = int(moderator[key])
+                if self._moderator_legendre_order < 1:
+                    raise ValueError("Moderator Legendre order must be >= 1.")
+            elif key == 'material':
+                if isinstance(moderator[key], Material) == False:
+                    raise TypeError("Provided moderator is not a scarabee.Material instance.")
+                self._moderator = moderator[key]
+            else:
+                raise KeyError(f"Unknown key \"{key}\" provided in moderator dictionary.")
+        # If the moderator material wasn't directly provided, we make it from the info
+        try:
+            self._moderator
+        except AttributeError:
+            # Make material for borated water
+            self._moderator: Material = borated_water(
+                self.boron_ppm, self.moderator_temp, self.moderator_pressure, self._ndl
+            )
+            self._moderator.name = f"Moderator ({self.boron_ppm} ppm boron)"
+            self._moderator.max_legendre_order = self._moderator_legendre_order
 
         if linear_power <= 0.0:
             raise ValueError("Linear power must be > 0.")
         self._linear_power = linear_power
-
-        # Make material for borated water
-        self._moderator: Material = borated_water(
-            self.boron_ppm, self.moderator_temp, self.moderator_pressure, self._ndl
-        )
-        self._moderator.name = f"Moderator ({self.boron_ppm} ppm boron)"
-        self._moderator.max_legendre_order = self._moderator_legendre_order
 
         # Set initial boundary conditions
         self._x_min_bc = BoundaryCondition.Periodic
@@ -526,6 +548,7 @@ class PWRAssembly:
         # is performed, a DiffusionData instance will be generated for each
         # burn-up step.
         self._diffusion_data: Optional[Union[DiffusionData, List[DiffusionData]]] = None
+        self._form_factors: Optional[Union[FormFactors, List[FormFactors]]] = None
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -950,6 +973,10 @@ class PWRAssembly:
     @property
     def diffusion_data(self) -> Optional[Union[DiffusionData, List[DiffusionData]]]:
         return self._diffusion_data
+
+    @property
+    def form_factors(self) -> Optional[Union[FormFactors, List[FormFactors]]]:
+        return self._form_factors
 
     def _set_cells(self, cells: List[List[Union[FuelPin, GuideTube]]]) -> None:
         if len(cells) != self._simulated_shape[1]:
@@ -2082,15 +2109,15 @@ class PWRAssembly:
             for i in range(len(self.cells[j])):
                 cell = self.cells[j][i].normalize_flux_spectrum(f)
 
-    def _compute_form_factors(self) -> np.ndarray:
+    def _compute_form_factors(self) -> FormFactors:
         """
         Computes the one group pin power form factors for the full assembly.
 
         Returns
         -------
-        ndarray
-            A 2D Numpy array for the pin power form factors. First index is
-            y (from high to low) and the second index is x (from low to high).
+        FormFactors
+            A FormFactors object for the pin power reconstruction. First index
+            is y (from high to low) and second index is x (from low to high).
         """
         if self.symmetry == Symmetry.Quarter and self.independent_quadrant:
             ff = np.zeros((self._simulated_shape[1], self._simulated_shape[0]))
@@ -2108,7 +2135,20 @@ class PWRAssembly:
             mean_ff = np.mean(ff)
             ff /= mean_ff
 
-            return ff
+            # Create the widths arrays
+            x_widths = np.zeros(len(self.cells[0]))
+            y_widths = np.zeros(len(self.cells))
+            x_widths[:] = self.pitch
+            y_widths[:] = self.pitch
+            if self.shape[0] % 2 == 1 and self.shape[1] % 2 == 1:
+                x_widths[0] *= 0.5
+                y_widths[0] *= 0.5
+            gap_width = 0.5 * (self.assembly_pitch - self.shape[0] * self.pitch)
+            if gap_width > 0.:
+                x_widths[-1] += gap_width
+                y_widths[-1] += gap_width
+
+            return FormFactors(ff, x_widths, y_widths)
 
         else:
             ff = np.zeros((self.shape[1], self.shape[0]))
@@ -2142,7 +2182,19 @@ class PWRAssembly:
             mean_ff = np.mean(ff)
             ff /= mean_ff
 
-            return ff
+            # Create the widths arrays
+            x_widths = np.zeros(self.shape[1])
+            y_widths = np.zeros(self.shape[0])
+            x_widths[:] = self.pitch
+            y_widths[:] = self.pitch
+            gap_width = 0.5 * (self.assembly_pitch - self.shape[0] * self.pitch)
+            if gap_width > 0.:
+                x_widths[0] += gap_width
+                y_widths[0] += gap_width
+                x_widths[-1] += gap_width
+                y_widths[-1] += gap_width
+
+            return FormFactors(ff, x_widths, y_widths)
 
     def _compute_few_group_xs(self) -> DiffusionCrossSection:
         """
@@ -2274,9 +2326,10 @@ class PWRAssembly:
 
         return lc
 
-    def _compute_diffusion_data(self) -> DiffusionData:
+    def _compute_diffusion_data_and_form_factors(self) -> Tuple[DiffusionData, FormFactors]:
         """
-        Computes the nodal diffusion data for the assembly.
+        Computes the nodal diffusion data for the assembly along with the form
+        factors for pin power reconstruction.
 
         If self.leakage_corrections is True, the coefficients used to update
         the few-group cross sections in the nodal diffusion solver based on the
@@ -2289,6 +2342,8 @@ class PWRAssembly:
         -------
         DiffusionData
             Few-group diffusion cross sections and discontinuity factors.
+        FormFactors
+            Form factors to be used for pin power reconstruction.
         """
         if self.condensation_scheme is None:
             raise RuntimeError("Energy condensation scheme not set.")
@@ -2311,7 +2366,7 @@ class PWRAssembly:
                 scarabee_log(LogLevel.Warning, mssg)
             adf, cdf = compute_adf_cdf_from_moc(self._asmbly_moc, self.condensation_scheme, self.symmetry, self.independent_quadrant)
 
-        diff_data = DiffusionData(diff_xs, ff, adf, cdf)
+        diff_data = DiffusionData(diff_xs, adf, cdf)
         
         if self.leakage_corrections and self.leakage_model == CriticalLeakage.NoLeakage:
             scarabee_log(LogLevel.Warning, "Leakage corrections were requested, but no critical leakage model is provided.")
@@ -2319,7 +2374,7 @@ class PWRAssembly:
         elif self.leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage:
             diff_data.leakage_corrections = self._compute_leakage_corrections()
 
-        return  diff_data
+        return  diff_data, ff
 
     def _run_assembly_calculation(
         self,
@@ -2416,6 +2471,7 @@ class PWRAssembly:
         self._exposures = np.zeros(self.depletion_exposure_steps.size + 1)
         self._times = np.zeros(self.depletion_exposure_steps.size + 1)
         self._diffusion_data = []
+        self._form_factors = []
 
         for t, dt in enumerate(self.depletion_time_steps):
             if t > 0:
@@ -2424,8 +2480,9 @@ class PWRAssembly:
                 )
                 self._times[t] = self._times[t - 1] + self.depletion_time_steps[t - 1]
 
-            scarabee_log(LogLevel.Info, "")
-            scarabee_log(LogLevel.Info, 60 * "-")
+                # Don't write separating line at first iteration
+                scarabee_log(LogLevel.Info, 60 * "-")
+
             scarabee_log(LogLevel.Info, "Running Time Step {:}".format(t))
             scarabee_log(
                 LogLevel.Info, "Exposure: {:.3E} MWd/kg".format(self._exposures[t])
@@ -2444,7 +2501,9 @@ class PWRAssembly:
             self._run_assembly_calculation(True)
             scarabee_log(LogLevel.Info, "")
             self._keff[t] = self._asmbly_moc.keff
-            self._diffusion_data.append(self._compute_diffusion_data())
+            dd, ff = self._compute_diffusion_data_and_form_factors()
+            self._diffusion_data.append(dd)
+            self._form_factors.append(ff)
 
             # Predic isotopes at midpoint of step
             self._predict_depletion(dt_sec, dtm1_sec)
@@ -2455,6 +2514,8 @@ class PWRAssembly:
 
             # Do correction step for isotopes
             self._correct_depletion(dt_sec, dtm1_sec)
+
+            scarabee_log(LogLevel.Info, "")
 
         # Run last step at the end to get keff for our final material compositions
         scarabee_log(LogLevel.Info, "")
@@ -2471,7 +2532,9 @@ class PWRAssembly:
         scarabee_log(LogLevel.Info, "")
         self._run_assembly_calculation(True)
         self._keff[-1] = self._asmbly_moc.keff
-        self._diffusion_data.append(self._compute_diffusion_data())
+        dd, ff = self._compute_diffusion_data_and_form_factors()
+        self._diffusion_data.append(dd)
+        self._form_factors.append(ff)
         scarabee_log(LogLevel.Info, "")
 
     def solve(self) -> None:
@@ -2484,7 +2547,7 @@ class PWRAssembly:
             # Single one-off calulcation
             self._run_assembly_calculation(True)
             self._keff = self._asmbly_moc.keff
-            self._diffusion_data = self._compute_diffusion_data()
+            self._diffusion_data, self._form_factors = self._compute_diffusion_data_and_form_factors()
         else:
             # Run depletion steps
             self._run_depletion_steps()
