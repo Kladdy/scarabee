@@ -17,6 +17,19 @@ more easily included as a dependency in other open-source projects with a permis
 license, and Python scripts which simply use Scarabée can be under whatever license the
 author desires.
 
+--------------------
+Importan API Changes
+--------------------
+
+- The moderator parameters (boron concentration, temperature, and pressure) are now
+  specified on a PWRAssembly using a dictionary, instead of each trait having its own
+  parameter in the constructor.
+- DiffusionData no longer contains any form factors. These are now stored in their own
+  dedicated class, FormFactors. You will not be able to de-serialize previously stored
+  DiffusionData instances with this new version, and you will need to re-run assembly
+  problems to re-generate nodal data.
+- The NEMDiffusionDriver can no longer perform pin power reconstruction.
+
 ------------
 New Features
 ------------
@@ -60,6 +73,27 @@ New Features
   leakage model applied. Because this is now the default mode, DiffusionData produced in
   this manner for the nodal solver will no longer yield equivalent results to the
   finite-difference solver !
+- You can now either specify the parameters for the moderator in a PWRAssembly, or you
+  can directly provide a Material instance. This is highly useful, as some benchmarks
+  specifically provide atom concentrations, which likely will not be in agreement with
+  the borated_water function which is used otherwise.
+- It is now possible to reflect DiffusionData across either the x or y axis, which now
+  makes it fully possible to generate unique nodal data for each quadrant of an assembly.
+  This is needed when modeling asymmetric burnable poison configurations.
+- There is a new FormFactors class which represents the form factors for an entire
+  assembly. Like DiffusionData, they can be rotated or reflected.
+- While there was previously the option to generate independent quadrant nodal data from
+  the PWRAssembly class, it wasn't usable in practice because you couldn't correclty
+  reorient a quadrant without reflections. This problem is not resolved with the new
+  reflection methods on DiffusionData and FormFactors.
+- A new CoreFormFactors class facilitates pin power reconstruction, and is more versatile
+  than the previous add-hoc solution which was located in the NEMDiffusionDriver, and has
+  been removed.
+- A new CoreBuilder class facilitates building a full core nodal modal, along with the
+  corresponding CoreFormFactors. It can also carry our pin power reconstruction and 
+  compute assembly powers. It uses SimpleTile and QuadrantsTile to describe the full core
+  geometry, both inheriting from CoreTile. This makes it easier to describe cores where
+  some assemblies might be asymmetric with unique quadrants.
 
 ---------
 Bug Fixes
@@ -87,6 +121,7 @@ Bug Fixes
   values for the diffusion coefficients and flux spectrum.
 - The P1 and B1 critical spectrum methods could not compute the diffusion coefficients
   when the buckling was zero.
+- The rotate_counterclockwise method on DiffusionData was not correctly implemented.
 
 ------------
 Contributors
