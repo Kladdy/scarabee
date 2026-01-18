@@ -2,6 +2,7 @@ from .._scarabee import (
     Vector,
     Direction,
     MOCDriver,
+    BoundaryCondition,
     CMFD,
     ADF,
     CDF,
@@ -517,6 +518,11 @@ def _get_2d_nodal_flux_from_cmfd(
     keff = moc.keff
     cmfd = moc.cmfd
 
+    tally_j_xp = i != cmfd.nx - 1 or moc.x_max_bc != BoundaryCondition.Reflective
+    tally_j_xn = i != 0 or moc.x_min_bc != BoundaryCondition.Reflective
+    tally_j_yp = j != cmfd.ny - 1 or moc.y_max_bc != BoundaryCondition.Reflective
+    tally_j_yn = j != 0 or moc.y_min_bc != BoundaryCondition.Reflective
+
     dx = cmfd.dx[i]
     dy = cmfd.dy[j]
 
@@ -550,10 +556,14 @@ def _get_2d_nodal_flux_from_cmfd(
         for g in range(
             cmfd_to_nodal_cond_scheme[G][0], cmfd_to_nodal_cond_scheme[G][1] + 1
         ):
-            j_x_neg[G] += cmfd.current(g, s_x_neg)
-            j_x_pos[G] += cmfd.current(g, s_x_pos)
-            j_y_neg[G] += cmfd.current(g, s_y_neg)
-            j_y_pos[G] += cmfd.current(g, s_y_pos)
+            if tally_j_xn:
+                j_x_neg[G] += cmfd.current(g, s_x_neg)
+            if tally_j_xp:
+                j_x_pos[G] += cmfd.current(g, s_x_pos)
+            if tally_j_yn:
+                j_y_neg[G] += cmfd.current(g, s_y_neg)
+            if tally_j_yp:
+                j_y_pos[G] += cmfd.current(g, s_y_pos)
 
     return NodalFlux2D(
         dx, dy, keff, few_diff_xs, avg_flux, j_x_neg, j_x_pos, j_y_neg, j_y_pos
@@ -567,6 +577,8 @@ def _get_avg_x_pos_current_cmfd(
     cmfd = moc.cmfd
 
     current = np.zeros(NG)
+    if moc.x_max_bc == BoundaryCondition.Reflective:
+        return current
 
     dlts = cmfd.dy
 
@@ -595,6 +607,8 @@ def _get_avg_x_neg_current_cmfd(
     cmfd = moc.cmfd
 
     current = np.zeros(NG)
+    if moc.x_min_bc == BoundaryCondition.Reflective:
+        return current
 
     dlts = cmfd.dy
 
@@ -623,6 +637,8 @@ def _get_avg_y_pos_current_cmfd(
     cmfd = moc.cmfd
 
     current = np.zeros(NG)
+    if moc.y_max_bc == BoundaryCondition.Reflective:
+        return current
 
     dlts = cmfd.dx
 
@@ -651,6 +667,8 @@ def _get_avg_y_neg_current_cmfd(
     cmfd = moc.cmfd
 
     current = np.zeros(NG)
+    if moc.y_min_bc == BoundaryCondition.Reflective:
+        return current
 
     dlts = cmfd.dx
 
@@ -680,6 +698,8 @@ def _get_het_flux_xp_cmfd(
     NG = len(cmfd_to_nodal_cond_scheme)
     keff = moc.keff
     cmfd = moc.cmfd
+
+    tally_j_pos = moc.x_max_bc != BoundaryCondition.Reflective
 
     dlts = cmfd.dy
 
@@ -720,7 +740,8 @@ def _get_het_flux_xp_cmfd(
                 cmfd_to_nodal_cond_scheme[G][0], cmfd_to_nodal_cond_scheme[G][1] + 1
             ):
                 j_neg[G] += cmfd.current(g, s_neg)
-                j_pos[G] += cmfd.current(g, s_pos)
+                if tally_j_pos:
+                    j_pos[G] += cmfd.current(g, s_pos)
 
         # Create 1D nodal flux object
         node_fluxes.append(
@@ -745,6 +766,8 @@ def _get_het_flux_xn_cmfd(
     NG = len(cmfd_to_nodal_cond_scheme)
     keff = moc.keff
     cmfd = moc.cmfd
+
+    tally_j_neg = moc.x_min_bc != BoundaryCondition.Reflective
 
     dlts = cmfd.dy
 
@@ -784,7 +807,8 @@ def _get_het_flux_xn_cmfd(
             for g in range(
                 cmfd_to_nodal_cond_scheme[G][0], cmfd_to_nodal_cond_scheme[G][1] + 1
             ):
-                j_neg[G] += cmfd.current(g, s_neg)
+                if tally_j_neg:
+                    j_neg[G] += cmfd.current(g, s_neg)
                 j_pos[G] += cmfd.current(g, s_pos)
 
         # Create 1D nodal flux object
@@ -810,6 +834,8 @@ def _get_het_flux_yp_cmfd(
     NG = len(cmfd_to_nodal_cond_scheme)
     keff = moc.keff
     cmfd = moc.cmfd
+
+    tally_j_pos = moc.y_max_bc != BoundaryCondition.Reflective
 
     dlts = cmfd.dx
 
@@ -850,7 +876,8 @@ def _get_het_flux_yp_cmfd(
                 cmfd_to_nodal_cond_scheme[G][0], cmfd_to_nodal_cond_scheme[G][1] + 1
             ):
                 j_neg[G] += cmfd.current(g, s_neg)
-                j_pos[G] += cmfd.current(g, s_pos)
+                if tally_j_pos:
+                    j_pos[G] += cmfd.current(g, s_pos)
 
         # Create 1D nodal flux object
         node_fluxes.append(
@@ -875,6 +902,8 @@ def _get_het_flux_yn_cmfd(
     NG = len(cmfd_to_nodal_cond_scheme)
     keff = moc.keff
     cmfd = moc.cmfd
+
+    tally_j_neg = moc.y_min_bc != BoundaryCondition.Reflective
 
     dlts = cmfd.dx
     node_fluxes = []
@@ -913,7 +942,8 @@ def _get_het_flux_yn_cmfd(
             for g in range(
                 cmfd_to_nodal_cond_scheme[G][0], cmfd_to_nodal_cond_scheme[G][1] + 1
             ):
-                j_neg[G] += cmfd.current(g, s_neg)
+                if tally_j_neg:
+                    j_neg[G] += cmfd.current(g, s_neg)
                 j_pos[G] += cmfd.current(g, s_pos)
 
         # Create 1D nodal flux object
