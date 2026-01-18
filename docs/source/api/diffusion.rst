@@ -3,6 +3,12 @@ Diffusion
 
 .. currentmodule:: scarabee
 
+.. autoclass:: scarabee.DiffusionData
+
+.. autoclass:: scarabee.LeakageCorrections
+
+.. autoclass:: scarabee.FormFactors
+
 .. autoclass:: scarabee.DiffusionGeometryTile
    :members:
 
