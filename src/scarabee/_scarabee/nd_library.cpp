@@ -324,7 +324,6 @@ void NDLibrary::init() {
 
   spdlog::info("Nuclear Data Library based on {} using {} group structure",
                library_, group_structure_);
-  spdlog::info("");
 
   if (h5_->hasAttribute("last-resonance-group")) {
     last_resonant_group_ =
