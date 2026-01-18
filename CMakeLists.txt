@@ -213,6 +213,7 @@ pybind11_add_module(_scarabee src/scarabee/_scarabee/constants.cpp
                               src/scarabee/_scarabee/criticality_spectrum.cpp
                               src/scarabee/_scarabee/leakage_corrections.cpp
                               src/scarabee/_scarabee/diffusion_data.cpp
+                              src/scarabee/_scarabee/form_factors.cpp
                               src/scarabee/_scarabee/diffusion_geometry.cpp
                               src/scarabee/_scarabee/fd_diffusion_driver.cpp
                               src/scarabee/_scarabee/nem_diffusion_driver.cpp
@@ -253,6 +254,7 @@ pybind11_add_module(_scarabee src/scarabee/_scarabee/constants.cpp
                               src/scarabee/_scarabee/python/criticality_spectrum.cpp
                               src/scarabee/_scarabee/python/leakage_corrections.cpp
                               src/scarabee/_scarabee/python/diffusion_data.cpp
+                              src/scarabee/_scarabee/python/form_factors.cpp
                               src/scarabee/_scarabee/python/diffusion_geometry.cpp
                               src/scarabee/_scarabee/python/fd_diffusion_driver.cpp
                               src/scarabee/_scarabee/python/nem_diffusion_driver.cpp

@@ -33,10 +33,6 @@ class DiffusionData {
   DiffusionData(std::shared_ptr<DiffusionCrossSection> xs);
 
   DiffusionData(std::shared_ptr<DiffusionCrossSection> xs,
-                const xt::xtensor<double, 2>& form_factors);
-
-  DiffusionData(std::shared_ptr<DiffusionCrossSection> xs,
-                const xt::xtensor<double, 2>& form_factors,
                 const xt::xtensor<double, 2>& adf,
                 const xt::xtensor<double, 2>& cdf);
 
@@ -148,9 +144,6 @@ class DiffusionData {
   bool reflector() const { return reflector_; }
   void set_reflector(bool r) { reflector_ = r; }
 
-  const xt::xtensor<double, 2>& form_factors() const { return form_factors_; }
-  void set_form_factors(const xt::xtensor<double, 2>& ff);
-
   const xt::xtensor<double, 2>& adf() const { return adf_; }
   void set_adf(const xt::xtensor<double, 2>& adf);
 
@@ -162,7 +155,6 @@ class DiffusionData {
 
  private:
   std::shared_ptr<DiffusionCrossSection> xs_;
-  xt::xtensor<double, 2> form_factors_;
   xt::xtensor<double, 2> adf_;  // group then ADF direction
   xt::xtensor<double, 2> cdf_;  // group then CDF direction
   std::string name_;
@@ -173,9 +165,8 @@ class DiffusionData {
   DiffusionData() {}
   template <class Archive>
   void serialize(Archive& arc) {
-    arc(CEREAL_NVP(xs_), CEREAL_NVP(form_factors_), CEREAL_NVP(adf_),
-        CEREAL_NVP(cdf_), CEREAL_NVP(name_), CEREAL_NVP(leakage_corrections_),
-        CEREAL_NVP(reflector_));
+    arc(CEREAL_NVP(xs_), CEREAL_NVP(adf_), CEREAL_NVP(cdf_), CEREAL_NVP(name_),
+        CEREAL_NVP(leakage_corrections_), CEREAL_NVP(reflector_));
   }
 };
 

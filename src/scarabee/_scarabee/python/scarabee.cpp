@@ -42,6 +42,7 @@ extern void init_MOCDriver(py::module&);
 extern void init_CriticalitySpectrum(py::module&);
 extern void init_LeakageCorrections(py::module&);
 extern void init_DiffusionData(py::module&);
+extern void init_FormFactors(py::module&);
 extern void init_DiffusionGeometry(py::module&);
 extern void init_FDDiffusionDriver(py::module&);
 extern void init_NEMDiffusionDriver(py::module&);
@@ -87,6 +88,7 @@ PYBIND11_MODULE(_scarabee, m, py::mod_gil_not_used()) {
   init_CriticalitySpectrum(m);
   init_LeakageCorrections(m);
   init_DiffusionData(m);
+  init_FormFactors(m);
   init_DiffusionGeometry(m);
   init_FDDiffusionDriver(m);
   init_NEMDiffusionDriver(m);

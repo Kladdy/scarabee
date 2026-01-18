@@ -2,6 +2,9 @@
 #include <pybind11/stl.h>
 #include <xtensor-python/pytensor.hpp>
 
+#include <cereal/types/memory.hpp>
+#include <cereal/archives/portable_binary.hpp>
+
 #include <diffusion/diffusion_data.hpp>
 
 namespace py = pybind11;
@@ -29,7 +32,7 @@ void init_DiffusionData(py::module& m) {
       m, "DiffusionData",
       "A DiffusionData object contains all necessary cross section "
       "information to perform a diffusion calculation, along with "
-      "assembly discontinuity factors and form factors.")
+      "assembly discontinuity factors and corner discontinuity factors.")
 
       .def(py::init<std::shared_ptr<DiffusionCrossSection> /*xs*/>(),
            "Creates a DiffusionData object.\n\n"
@@ -40,20 +43,6 @@ void init_DiffusionData(py::module& m) {
            py::arg("xs"))
 
       .def(py::init<std::shared_ptr<DiffusionCrossSection> /*xs*/,
-                    const xt::xtensor<double, 2>& /*form_factors*/>(),
-           "Creates a DiffusionData object.\n\n"
-           "Parameters\n"
-           "----------\n"
-           "xs : DiffusionCrossSection\n"
-           "     Diffusion cross sections for calculations.\n"
-           "form_factors : ndarray\n"
-           "     A 2D array of pin-wise form factors for power reconstruction. "
-           "The first axis is y (from positive to negative) and the second "
-           "axis is x (from negative to positive).\n\n",
-           py::arg("xs"), py::arg("form_factors"))
-
-      .def(py::init<std::shared_ptr<DiffusionCrossSection> /*xs*/,
-                    const xt::xtensor<double, 2>& /*form_factors*/,
                     const xt::xtensor<double, 2>& /*adf*/,
                     const xt::xtensor<double, 2>& /*cdf*/>(),
            "Creates a DiffusionData object.\n\n"
@@ -61,18 +50,13 @@ void init_DiffusionData(py::module& m) {
            "----------\n"
            "xs : DiffusionCrossSection\n"
            "     Diffusion cross sections for calculations.\n"
-           "form_factors : ndarray\n"
-           "     A 2D array of pin-wise form factors for power reconstruction. "
-           "The first axis is y (from positive to negative) and the second "
-           "axis is x (from negative to positive).\n"
            "adf : ndarray\n"
            "    A 2D array of ADFs. The first axis is energy group, and the "
            "second axis is the side (Y+, X+, Y-, X-).\n"
            "cdf : ndarray\n"
            "    A 2D array of CDFs. The first axis is energy group, and the "
            "second axis is the corner (I, II, III, IV).\n\n",
-           py::arg("xs"), py::arg("form_factors"), py::arg("adf"),
-           py::arg("cdf"))
+           py::arg("xs"), py::arg("adf"), py::arg("cdf"))
 
       .def_property_readonly("ngroups", &DiffusionData::ngroups,
                              "Number of energy groups.")
@@ -98,10 +82,6 @@ void init_DiffusionData(py::module& m) {
                     &DiffusionData::set_reflector,
                     "Flag to indicate the data is for a reflector, and the "
                     "ADFs should be multiplied by the adjacent fuel ADFs.")
-
-      .def_property("form_factors", &DiffusionData::form_factors,
-                    &DiffusionData::set_form_factors,
-                    "Assembly form-factors for power reconstruction.")
 
       .def_property("adf", &DiffusionData::adf, &DiffusionData::set_adf,
                     "Assembly discontinuity factors.")
@@ -267,23 +247,23 @@ void init_DiffusionData(py::module& m) {
            py::arg("g"))
 
       .def("rotate_clockwise", &DiffusionData::rotate_clockwise,
-           "Rotates the ADFs and form factors corresponding to a 90 degree "
+           "Rotates the ADFs corresponding to a 90 degree "
            "rotation of the assembly in the clockwise direction.",
            py::return_value_policy::reference_internal)
 
       .def("rotate_counterclockwise", &DiffusionData::rotate_counterclockwise,
-           "Rotates the ADFs and form factors corresponding to a 90 degree "
+           "Rotates the ADFs corresponding to a 90 degree "
            "rotation of the assembly in the counter clockwise direction.",
            py::return_value_policy::reference_internal)
 
       .def("reflect_across_x_axis", &DiffusionData::reflect_across_x_axis,
-           "Performs a reflection of the ADFs and form factors across the x "
+           "Performs a reflection of the ADFs across the x "
            "axis. A reflection across the x axis means that the +y and -y ADFs "
            "are swapped.",
            py::return_value_policy::reference_internal)
 
       .def("reflect_across_y_axis", &DiffusionData::reflect_across_y_axis,
-           "Performs a reflection of the ADFs and form factors across the y "
+           "Performs a reflection of the ADFs across the y "
            "axis. A reflection across the y axis means that the +x and -x ADFs "
            "are swapped.",
            py::return_value_policy::reference_internal)
@@ -305,15 +285,36 @@ void init_DiffusionData(py::module& m) {
                   "Returns\n"
                   "-------\n"
                   "DiffusionData\n"
-                  "    Diffusion cross sections, form factors, and ADF from "
-                  "the file.\n",
+                  "    Diffusion cross sections and ADF from the file.\n",
                   py::arg("fname"))
 
-      .def("__deepcopy__", [](const DiffusionData& xs, py::dict) {
-        DiffusionData out(std::make_shared<DiffusionCrossSection>(*xs.xs()));
-        out.set_adf(xs.adf());
-        out.set_cdf(xs.cdf());
-        out.set_form_factors(xs.form_factors());
-        return out;
-      });
+      .def("__deepcopy__",
+           [](const DiffusionData& xs, py::dict) {
+             DiffusionData out(
+                 std::make_shared<DiffusionCrossSection>(*xs.xs()));
+             out.set_adf(xs.adf());
+             out.set_cdf(xs.cdf());
+             return out;
+           })
+
+      .def(py::pickle(
+          [](const std::shared_ptr<DiffusionData>& p) {
+            std::ostringstream bits_stream(std::ios_base::binary |
+                                           std::ios_base::out);
+            {
+              cereal::PortableBinaryOutputArchive ar(bits_stream);
+              ar(p);
+            }
+            return py::bytes(bits_stream.str());
+          },
+          [](py::bytes bites) {
+            std::istringstream bits_stream(
+                bites, std::ios_base::binary | std::ios_base::in);
+            std::shared_ptr<DiffusionData> p;
+            {
+              cereal::PortableBinaryInputArchive ar(bits_stream);
+              ar(p);
+            }
+            return p;
+          }));
 }
