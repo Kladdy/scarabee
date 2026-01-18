@@ -30,3 +30,20 @@ Equivalence Theory
 .. autofunction:: scarabee.reseau.compute_adf_cdf_from_cmfd
 
 .. autofunction:: scarabee.reseau.compute_adf_cdf_from_moc
+
+Full Core Tool Chains
+=====================
+
+Building Full Core Models
+-------------------------
+
+.. currentmodule:: scarabee.coeur
+
+.. autoclass:: scarabee.coeur.SimpleTile
+
+.. autoclass:: scarabee.coeur.QuadrantsTile
+
+.. autoclass:: scarabee.coeur.CoreFormFactors
+
+.. autoclass:: scarabee.coeur.CoreBuilder
+
