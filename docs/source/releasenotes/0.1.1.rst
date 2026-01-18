@@ -61,18 +61,16 @@ New Features
 - A new LeakageCorrections class now exists, which can be optionally added to a
   DiffusionData. It contains the linear coefficients to update few-group diffusion cross
   sections based on the in-situ leakage-to-removal ratio.
-- The NEMDiffusionDriver will now update the nodal cross sections every 50 iterations,
+- The NEMDiffusionDriver can now update the nodal cross sections every 50 iterations,
   using the LeakageCorrections data (if present) and the node averaged buckling. This
   requires that the DiffusionData has few-group cross sections which were not generated
   with the leakage model (see new PWRAssembly option below). To disable this feature,
   the NEMDiffusionDriver now has a leakage_corrections flag which can be set to False.
-- The PWRAssembly class now has a leakage_corrections flag, which if True (default
-  value), will generate DiffusionData few-group cross sections without the leakage
-  model, but will contain a LeakageCorrections instance to update the few-group cross
-  sections in the nodal solver. If False, the few-group cross sections will have the
-  leakage model applied. Because this is now the default mode, DiffusionData produced in
-  this manner for the nodal solver will no longer yield equivalent results to the
-  finite-difference solver !
+- The PWRAssembly class now has a leakage_corrections flag, which if True, will generate
+  DiffusionData few-group cross sections without the leakage model, but will contain a
+  LeakageCorrections instance to update the few-group cross sections in the nodal solver.
+  If False (default value), the few-group cross sections will have the leakage model
+  applied.
 - You can now either specify the parameters for the moderator in a PWRAssembly, or you
   can directly provide a Material instance. This is highly useful, as some benchmarks
   specifically provide atom concentrations, which likely will not be in agreement with
