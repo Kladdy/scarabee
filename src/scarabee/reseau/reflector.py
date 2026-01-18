@@ -7,6 +7,7 @@ from .._scarabee import (
     ReflectorSN,
     DiffusionGeometry,
     NEMDiffusionDriver,
+    FormFactors,
     set_logging_level,
     scarabee_log,
     LogLevel,
@@ -117,7 +118,7 @@ class Reflector:
         self.keff_tolerance = 1.0e-6
         self.flux_tolerance = 1.0e-6
 
-        if self.gap_width + self.baffle_width >= self.assembly_width:
+        if self.gap_width + self.baffle_width > self.assembly_width:
             raise RuntimeError(
                 "The assembly width is smaller than the sum of the gap and baffle widths."
             )
@@ -320,6 +321,7 @@ class Reflector:
         self.diffusion_data = DiffusionData(self.diffusion_xs)
         self.diffusion_data.adf = self.adf
         self.diffusion_data.reflector = True
+        self.form_factors = FormFactors(np.array([[0.]]), np.array([self.assembly_width]), np.array([self.assembly_width]))
 
         # Do a nodal k-eff calulation
         fuel_diffision_data = DiffusionData(fuel_diffusion_xs)
