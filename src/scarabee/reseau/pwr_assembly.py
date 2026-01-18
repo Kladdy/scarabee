@@ -209,7 +209,7 @@ class PWRAssembly:
         sections based on the in-situ leakage from the nodal diffusion solver.
         If False, the diffusion data does not have a LeakageCorrections instance
         and the few-group cross sections DO have the critical leakage model
-        applied. Default is True.
+        applied. Default is False.
     leakage_model : CriticalLeakage
         Model used to determine the critical leakage flux spectrum, also known
         as the fundamental mode. Default method is homogeneous P1.
@@ -511,7 +511,7 @@ class PWRAssembly:
         self._asmbly_geom: Optional[Cartesian2D] = None
         self._asmbly_moc: Optional[MOCDriver] = None
         
-        self._leakage_corrections: bool = True
+        self._leakage_corrections: bool = False
         self._leakage_model: CriticalLeakage = CriticalLeakage.P1
         self._infinite_flux_spectrum = (
             None  # To reset to infinite spectrum in MOC driver
