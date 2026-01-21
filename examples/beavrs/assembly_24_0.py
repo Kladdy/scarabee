@@ -7,7 +7,7 @@ from scarabee import (
     set_output_file,
 )
 from scarabee.reseau import FuelPin, GuideTube, PWRAssembly
-from scarabee.coeur import SimpleTile
+from scarabee.coeur import QuadrantsTile
 import pickle
 
 name = "F24_0"
@@ -65,10 +65,11 @@ asmbly = PWRAssembly(
     assembly_pitch=21.50364,
     shape=(17, 17),
     moderator={'boron-ppm': 975., 'temperature': 575., 'pressure': 15.5132},
+    independent_quadrant=True,
     cells=cells,
     ndl=ndl,
 )
 asmbly.solve()
 
-ct = SimpleTile(asmbly.diffusion_data, asmbly.form_factors)
+ct = QuadrantsTile.from_independent_quadrant(asmbly.diffusion_data, asmbly.form_factors)
 pickle.dump(ct, open(f'{name}.pkl', 'wb'))

@@ -4,6 +4,7 @@ from .._scarabee import (
 )
 from typing import Optional
 from abc import ABC, abstractmethod
+import copy
 
 
 class CoreTile(ABC):
@@ -173,6 +174,28 @@ class QuadrantsTile(CoreTile):
         self.quad3 = quad3
         self.quad4 = quad4
         self.form_factors = form_factors
+
+    @staticmethod
+    def from_independent_quadrant(
+        diffusion_data: DiffusionData, form_factors: FormFactors
+    ) -> "QuadrantsTile":
+        q1_dd = copy.deepcopy(diffusion_data)
+        q1_ff = copy.deepcopy(form_factors)
+        q2_dd = copy.deepcopy(q1_dd)
+        q2_ff = copy.deepcopy(q1_ff)
+        q2_dd.rotate_counterclockwise()
+        q2_ff.rotate_counterclockwise()
+        q3_dd = copy.deepcopy(q2_dd)
+        q3_ff = copy.deepcopy(q2_ff)
+        q3_dd.rotate_counterclockwise()
+        q3_ff.rotate_counterclockwise()
+        q4_dd = copy.deepcopy(q3_dd)
+        q4_ff = copy.deepcopy(q3_ff)
+        q4_dd.rotate_counterclockwise()
+        q4_ff.rotate_counterclockwise()
+        return QuadrantsTile(
+            q1_dd, q2_dd, q3_dd, q4_dd, FormFactors(q1_ff, q2_ff, q3_ff, q4_ff)
+        )
 
     @property
     def num_x_slots(self) -> int:
