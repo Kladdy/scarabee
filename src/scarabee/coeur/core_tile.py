@@ -19,21 +19,33 @@ class CoreTile(ABC):
     @property
     @abstractmethod
     def num_x_slots(self) -> int:
+        """
+        Number of unique nodes which should be used along the x direction.
+        """
         return 0
 
     @property
     @abstractmethod
     def num_y_slots(self) -> int:
+        """
+        Number of unique nodes which should be used along the y direction.
+        """
         return 0
 
     @property
     @abstractmethod
     def x_width(self) -> float:
+        """
+        Width of the tile along the x direction.
+        """
         return 0.0
 
     @property
     @abstractmethod
     def y_width(self) -> float:
+        """
+        Width of the tile along the y direction.
+        """
         return 0.0
 
     @abstractmethod
@@ -179,6 +191,22 @@ class QuadrantsTile(CoreTile):
     def from_independent_quadrant(
         diffusion_data: DiffusionData, form_factors: FormFactors
     ) -> "QuadrantsTile":
+        """
+        Creates a QuadrantsTile from a single DiffusionData and FormFactors
+        instance which were generated as independent quadrants, where ADFs and
+        CDFs were generated along the symmetry axes of the assembly.
+
+        Parameters
+        ----------
+        diffusion_data : DiffusionData
+            Few-group cross sections, ADFs, and CDFs for the quarter assembly.
+        form_factors : FormFactors
+            Form factors for the quarter assembly.
+
+        Returns
+        -------
+        QuadrantsTile
+        """
         q1_dd = copy.deepcopy(diffusion_data)
         q1_ff = copy.deepcopy(form_factors)
         q2_dd = copy.deepcopy(q1_dd)
