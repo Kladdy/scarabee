@@ -131,9 +131,10 @@ class NEMDiffusionDriver {
   xt::xtensor<double, 3> adf_;  // m, group, side
 
   double keff_ = 1.;
+  double kshift_ = 1.;
   double flux_tol_ = 1.E-5;
   double keff_tol_ = 1.E-5;
-  bool leakage_corrections_{true};
+  bool leakage_corrections_{false};
   bool solved_{false};
 
   //----------------------------------------------------------------------------
