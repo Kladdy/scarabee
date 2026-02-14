@@ -13,3 +13,4 @@ docs/_build
 docs/source/examples/.ipynb_checkpoints
 _scarabee.*
 *imgui.ini
+*scarabee_moc_plotter.ini
