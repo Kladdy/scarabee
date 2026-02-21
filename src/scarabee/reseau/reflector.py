@@ -321,7 +321,11 @@ class Reflector:
         self.diffusion_data = DiffusionData(self.diffusion_xs)
         self.diffusion_data.adf = self.adf
         self.diffusion_data.reflector = True
-        self.form_factors = FormFactors(np.array([[0.]]), np.array([self.assembly_width]), np.array([self.assembly_width]))
+        self.form_factors = FormFactors(
+            np.array([[0.0]]),
+            np.array([self.assembly_width]),
+            np.array([self.assembly_width]),
+        )
 
         # Do a nodal k-eff calulation
         fuel_diffision_data = DiffusionData(fuel_diffusion_xs)

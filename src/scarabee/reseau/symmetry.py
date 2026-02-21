@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class Symmetry(Enum):
     """
     Defines the symmetry to use when simulating a PWR fuel assembly.
@@ -19,4 +20,3 @@ class Symmetry(Enum):
     """
     The fuel assembly has symmetry about the x and y axis.
     """
-

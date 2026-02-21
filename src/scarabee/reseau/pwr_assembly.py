@@ -10,10 +10,7 @@ from ._ensleeve import (
     _ensleeve_half_right,
     _ensleeve_full,
 )
-from .equivalence_theory import (
-    compute_adf_cdf_from_cmfd,
-    compute_adf_cdf_from_moc
-)
+from .equivalence_theory import compute_adf_cdf_from_cmfd, compute_adf_cdf_from_moc
 from .._scarabee import (
     borated_water,
     Material,
@@ -48,6 +45,7 @@ import copy
 from threading import Thread
 import numpy as np
 from scipy.optimize import curve_fit
+
 
 class PWRAssembly:
     """
@@ -368,33 +366,35 @@ class PWRAssembly:
         self._compute_moderator_volume_fraction()
 
         # Get moderator parameters from the dictionary.
-        self._boron_ppm = 800.
-        self._moderator_temp = 570.
+        self._boron_ppm = 800.0
+        self._moderator_temp = 570.0
         self._moderator_pressure = 15.5
         self._moderator_legendre_order = 1
         for key in moderator:
-            if key == 'boron-ppm':
+            if key == "boron-ppm":
                 self._boron_ppm = float(moderator[key])
                 if self._boron_ppm < 0.0:
                     raise ValueError("Boron concentration must be >= 0.")
-            elif key == 'temperature':
+            elif key == "temperature":
                 self._moderator_temp = float(moderator[key])
                 if self._moderator_temp <= 0.0:
                     raise ValueError("Moderator temperature must be > 0.")
-            elif key == 'pressure':
+            elif key == "pressure":
                 self._moderator_pressure = float(moderator[key])
                 if self._moderator_pressure <= 0.0:
                     raise ValueError("Moderator pressure must be > 0.")
-            elif key == 'legendre-order':
+            elif key == "legendre-order":
                 self._moderator_legendre_order = int(moderator[key])
                 if self._moderator_legendre_order < 1:
                     raise ValueError("Moderator Legendre order must be >= 1.")
-            elif key == 'material':
+            elif key == "material":
                 if isinstance(moderator[key], Material) == False:
-                    raise TypeError("Provided moderator is not a scarabee.Material instance.")
+                    raise TypeError(
+                        "Provided moderator is not a scarabee.Material instance."
+                    )
                 self._moderator = moderator[key]
             else:
-                raise KeyError(f"Unknown key \"{key}\" provided in moderator dictionary.")
+                raise KeyError(f'Unknown key "{key}" provided in moderator dictionary.')
         # If the moderator material wasn't directly provided, we make it from the info
         try:
             self._moderator
@@ -500,7 +500,7 @@ class PWRAssembly:
         self._moc_track_spacing: float = 0.03
         self._moc_num_angles: int = 64
         # Default polar quadrature chosen later based on _anisotropic
-        self._moc_polar_quadrature: Optional[PolarQuadrature] = None 
+        self._moc_polar_quadrature: Optional[PolarQuadrature] = None
         self._flux_tolerance: float = 1.0e-5
         self._keff_tolerance: float = 1.0e-5
         self._anisotropic: bool = False
@@ -510,7 +510,7 @@ class PWRAssembly:
         self._asmbly_cells = []
         self._asmbly_geom: Optional[Cartesian2D] = None
         self._asmbly_moc: Optional[MOCDriver] = None
-        
+
         self._leakage_corrections: bool = False
         self._leakage_model: CriticalLeakage = CriticalLeakage.P1
         self._infinite_flux_spectrum = (
@@ -2000,7 +2000,8 @@ class PWRAssembly:
         if self.leakage_model == CriticalLeakage.NoLeakage:
             return
 
-        if not scilent: scarabee_log(LogLevel.Info, "")
+        if not scilent:
+            scarabee_log(LogLevel.Info, "")
 
         self._infinite_flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
 
@@ -2021,14 +2022,17 @@ class PWRAssembly:
         else:
             if not scilent:
                 scarabee_log(
-                    LogLevel.Info, "Performing fundamental mode criticality spectrum calculation"
+                    LogLevel.Info,
+                    "Performing fundamental mode criticality spectrum calculation",
                 )
             critical_spectrum = FundamentalModeCriticalitySpectrum(homogenized_moc)
 
         self._asmbly_moc.apply_criticality_spectrum(critical_spectrum.flux)
-        
+
         if not scilent:
-            scarabee_log(LogLevel.Info, "Kinf    : {:.5f}".format(critical_spectrum.k_inf))
+            scarabee_log(
+                LogLevel.Info, "Kinf    : {:.5f}".format(critical_spectrum.k_inf)
+            )
             scarabee_log(
                 LogLevel.Info, "Buckling: {:.5f}".format(critical_spectrum.buckling)
             )
@@ -2144,7 +2148,7 @@ class PWRAssembly:
                 x_widths[0] *= 0.5
                 y_widths[0] *= 0.5
             gap_width = 0.5 * (self.assembly_pitch - self.shape[0] * self.pitch)
-            if gap_width > 0.:
+            if gap_width > 0.0:
                 x_widths[-1] += gap_width
                 y_widths[-1] += gap_width
 
@@ -2188,7 +2192,7 @@ class PWRAssembly:
             x_widths[:] = self.pitch
             y_widths[:] = self.pitch
             gap_width = 0.5 * (self.assembly_pitch - self.shape[0] * self.pitch)
-            if gap_width > 0.:
+            if gap_width > 0.0:
                 x_widths[0] += gap_width
                 y_widths[0] += gap_width
                 x_widths[-1] += gap_width
@@ -2220,10 +2224,10 @@ class PWRAssembly:
         # either method is acceptable [2]. In light of these comments, I have
         # chosen to go with Smith's recommendation of performing energy
         # condensation on the diffusion coefficients.
-        
+
         # Get homogenized cross sections for assembly in MOC group structure
         homog_xs = self._asmbly_moc.homogenize()
-        
+
         # Obtain the flux spectrum for condensation
         if self.leakage_corrections or self.leakage_model == CriticalLeakage.NoLeakage:
             flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
@@ -2233,7 +2237,7 @@ class PWRAssembly:
             flux_spectrum = B1CriticalitySpectrum(homog_xs).flux
         else:
             flux_spectrum = FundamentalModeCriticalitySpectrum(homog_xs).flux
-        
+
         # Convert xs to diffusion xs, then condense
         diff_xs = homog_xs.diffusion_xs()
         return diff_xs.condense(self.condensation_scheme, flux_spectrum)
@@ -2248,20 +2252,22 @@ class PWRAssembly:
             raise RuntimeError("Energy condensation scheme not set.")
 
         if self.leakage_model == CriticalLeakage.NoLeakage:
-            raise RuntimeError("Cannot generate leakage corrections without a leakage model.")
-        
+            raise RuntimeError(
+                "Cannot generate leakage corrections without a leakage model."
+            )
+
         # Fitting function
         def fnc(xdata, C):
-            return C*xdata
+            return C * xdata
 
         # Number of few-groups
         NG = len(self.condensation_scheme)
 
         # initialize the leakage correction object
         lc = LeakageCorrections(NG)
-        
+
         # Get list of bucklings, and generate all few-group cross section sets
-        NB = 11 # Must be odd !
+        NB = 11  # Must be odd !
         B2s = np.linspace(start=-0.01, stop=0.01, num=NB)
         xss = []
         homog_xs = self._asmbly_moc.homogenize()
@@ -2274,59 +2280,61 @@ class PWRAssembly:
             else:
                 flux_spectrum = FundamentalModeCriticalitySpectrum(homog_xs, B2).flux
             xss.append(diff_xs.condense(self.condensation_scheme, flux_spectrum))
-        xs_ref = xss[int(NB/2)]
-        
+        xs_ref = xss[int(NB / 2)]
+
         D = np.zeros(NB)
         Ea = np.zeros(NB)
         Ef = np.zeros(NB)
         vEf = np.zeros(NB)
         Es = np.zeros(NB)
         for G_in in range(NG):
-            D.fill(0.)
-            Ea.fill(0.)
-            Ef.fill(0.)
-            vEf.fill(0.)
-            
+            D.fill(0.0)
+            Ea.fill(0.0)
+            Ef.fill(0.0)
+            vEf.fill(0.0)
+
             # For this group, fill all the buckling dependent data
             for b in range(NB):
                 D[b] = xss[b].D(G_in)
                 Ea[b] = xss[b].Ea(G_in)
                 Ef[b] = xss[b].Ef(G_in)
                 vEf[b] = xss[b].vEf(G_in)
-            
+
             # Compute the leakage to loss ratio
-            LRr = (D*B2s) / (xs_ref.Er(G_in))
-            
+            LRr = (D * B2s) / (xs_ref.Er(G_in))
+
             # Compute fractional changes
             f_D = (D - xs_ref.D(G_in)) / xs_ref.D(G_in)
             f_Ea = (Ea - xs_ref.Ea(G_in)) / xs_ref.Ea(G_in)
             f_Ef = (Ef - xs_ref.Ef(G_in)) / xs_ref.Ef(G_in)
             f_vEf = (vEf - xs_ref.vEf(G_in)) / xs_ref.vEf(G_in)
-            
+
             # Fit leakage correction coefficients
-            C_D, _   = curve_fit(fnc, LRr, f_D)
-            C_Ea, _  = curve_fit(fnc, LRr, f_Ea)
-            C_Ef, _  = curve_fit(fnc, LRr, f_Ef)
-            C_vEf, _  = curve_fit(fnc, LRr, f_vEf)
-            
+            C_D, _ = curve_fit(fnc, LRr, f_D)
+            C_Ea, _ = curve_fit(fnc, LRr, f_Ea)
+            C_Ef, _ = curve_fit(fnc, LRr, f_Ef)
+            C_vEf, _ = curve_fit(fnc, LRr, f_vEf)
+
             # Store computed values
             lc.set_D(G_in, C_D)
             lc.set_Ea(G_in, C_Ea)
             lc.set_Ef(G_in, C_Ef)
             lc.set_vEf(G_in, C_vEf)
-            
+
             # Do same for each down-scattering transition
-            for G_out in range(G_in+1, NG):
-                Es.fill(0.)
+            for G_out in range(G_in + 1, NG):
+                Es.fill(0.0)
                 for b in range(NB):
                     Es[b] = xss[b].Es(G_in, G_out)
                 f_Es = (Es - xs_ref.Es(G_in, G_out)) / xs_ref.Es(G_in, G_out)
-                C_Es, _  = curve_fit(fnc, LRr, f_Es)
+                C_Es, _ = curve_fit(fnc, LRr, f_Es)
                 lc.set_Es(G_in, G_out, C_Es)
 
         return lc
 
-    def _compute_diffusion_data_and_form_factors(self) -> Tuple[DiffusionData, FormFactors]:
+    def _compute_diffusion_data_and_form_factors(
+        self,
+    ) -> Tuple[DiffusionData, FormFactors]:
         """
         Computes the nodal diffusion data for the assembly along with the form
         factors for pin power reconstruction.
@@ -2359,22 +2367,40 @@ class PWRAssembly:
         ):
             # If we are using CMFD, we should use the currents to generate the
             # ADFs and CDFs, as it is far more accurate, as explained by Smith [1].
-            adf, cdf = compute_adf_cdf_from_cmfd(self._asmbly_moc, self.condensation_scheme, self.symmetry, self.independent_quadrant)
+            adf, cdf = compute_adf_cdf_from_cmfd(
+                self._asmbly_moc,
+                self.condensation_scheme,
+                self.symmetry,
+                self.independent_quadrant,
+            )
         else:
             if not self.prefer_moc_adf_cdf:
                 mssg = "CMFD is not on. Accurate discontinuity factors cannot be computed without CMFD."
                 scarabee_log(LogLevel.Warning, mssg)
-            adf, cdf = compute_adf_cdf_from_moc(self._asmbly_moc, self.condensation_scheme, self.symmetry, self.independent_quadrant)
+            adf, cdf = compute_adf_cdf_from_moc(
+                self._asmbly_moc,
+                self.condensation_scheme,
+                self.symmetry,
+                self.independent_quadrant,
+            )
 
         diff_data = DiffusionData(diff_xs, adf, cdf)
-        
+
         if self.leakage_corrections and self.leakage_model == CriticalLeakage.NoLeakage:
-            scarabee_log(LogLevel.Warning, "Leakage corrections were requested, but no critical leakage model is provided.")
-            scarabee_log(LogLevel.Warning, "Leakage correction coefficients WILL NOT be generated.")
-        elif self.leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage:
+            scarabee_log(
+                LogLevel.Warning,
+                "Leakage corrections were requested, but no critical leakage model is provided.",
+            )
+            scarabee_log(
+                LogLevel.Warning,
+                "Leakage correction coefficients WILL NOT be generated.",
+            )
+        elif (
+            self.leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage
+        ):
             diff_data.leakage_corrections = self._compute_leakage_corrections()
 
-        return  diff_data, ff
+        return diff_data, ff
 
     def _run_assembly_calculation(
         self,
@@ -2547,7 +2573,9 @@ class PWRAssembly:
             # Single one-off calulcation
             self._run_assembly_calculation(True)
             self._keff = self._asmbly_moc.keff
-            self._diffusion_data, self._form_factors = self._compute_diffusion_data_and_form_factors()
+            self._diffusion_data, self._form_factors = (
+                self._compute_diffusion_data_and_form_factors()
+            )
         else:
             # Run depletion steps
             self._run_depletion_steps()
