@@ -57,7 +57,7 @@ manylinux-x86_64-image = "manylinux_2_28"
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
-before-all: "dnf install -y wayland-devel libxkbcommon-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel mesa-libGL-devel mesa-libGLU-devel"
+before-all = "dnf install -y wayland-devel libxkbcommon-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel mesa-libGL-devel mesa-libGLU-devel"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
