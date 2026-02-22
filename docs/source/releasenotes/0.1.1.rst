@@ -17,9 +17,9 @@ more easily included as a dependency in other open-source projects with a permis
 license, and Python scripts which simply use Scarabée can be under whatever license the
 author desires.
 
---------------------
-Importan API Changes
---------------------
+---------------------
+Important API Changes
+---------------------
 
 - The moderator parameters (boron concentration, temperature, and pressure) are now
   specified on a PWRAssembly using a dictionary, instead of each trait having its own
@@ -28,7 +28,8 @@ Importan API Changes
   dedicated class, FormFactors. You will not be able to de-serialize previously stored
   DiffusionData instances with this new version, and you will need to re-run assembly
   problems to re-generate nodal data.
-- The NEMDiffusionDriver can no longer perform pin power reconstruction.
+- The NEMDiffusionDriver can no longer perform pin power reconstruction. There is a new
+  CoreFormFactors and CoreBuilder class which can accomplish this task (see below).
 
 ------------
 New Features
@@ -38,14 +39,15 @@ New Features
 - Information about the nuclear data library is now written to the log, so that you know
   what library was used in a simulation.
 - New Scarabée-155 group structure for better performance with MOX fuel.
+- Can now build nuclear data libraries with the SCALE-56 group structure.
 - The MOCDriver now performs tests on the angular quadrature to check for particle
   conservation. These tests are only performed when using anisotropic scattering, as
   that is the only case when the quadrature choice can lead to particle conservation
   troubles. If the quadrature does not ensure particle conservation, warnings are
   written to the log. This could indicate that CMFD might have convergence problems.
 - The MOCDriver now performs tests to ensure that all flat source regions are crossed by
-  at least one track for each azimuthal angle. If this is not the case, an error will be
-  written to the log.
+  at least one track for each azimuthal angle. If this is not the case, a warning will
+  be written to the log.
 - There is now a method on the Material class to compute the cross sections
   corresponding to an infinite homogeneous medium.
 - There is a new critical spectrum solver called FundamentalModeCriticalSpectrum. This
@@ -64,8 +66,8 @@ New Features
 - The NEMDiffusionDriver can now update the nodal cross sections every 50 iterations,
   using the LeakageCorrections data (if present) and the node averaged buckling. This
   requires that the DiffusionData has few-group cross sections which were not generated
-  with the leakage model (see new PWRAssembly option below). To disable this feature,
-  the NEMDiffusionDriver now has a leakage_corrections flag which can be set to False.
+  with the leakage model (see new PWRAssembly option below). To enable this feature,
+  the NEMDiffusionDriver now has a leakage_corrections flag which can be set to True.
 - The PWRAssembly class now has a leakage_corrections flag, which if True, will generate
   DiffusionData few-group cross sections without the leakage model, but will contain a
   LeakageCorrections instance to update the few-group cross sections in the nodal solver.
@@ -81,7 +83,7 @@ New Features
 - There is a new FormFactors class which represents the form factors for an entire
   assembly. Like DiffusionData, they can be rotated or reflected.
 - While there was previously the option to generate independent quadrant nodal data from
-  the PWRAssembly class, it wasn't usable in practice because you couldn't correclty
+  the PWRAssembly class, it wasn't usable in practice because you couldn't correctly
   reorient a quadrant without reflections. This problem is not resolved with the new
   reflection methods on DiffusionData and FormFactors.
 - A new CoreFormFactors class facilitates pin power reconstruction, and is more versatile
@@ -92,6 +94,8 @@ New Features
   compute assembly powers. It uses SimpleTile and QuadrantsTile to describe the full core
   geometry, both inheriting from CoreTile. This makes it easier to describe cores where
   some assemblies might be asymmetric with unique quadrants.
+- The track generation in the MOCDriver, as well as geometry plotting, is now
+  substantially faster thanks to a new cell search algorithm.
 
 ---------
 Bug Fixes
@@ -120,6 +124,9 @@ Bug Fixes
 - The P1 and B1 critical spectrum methods could not compute the diffusion coefficients
   when the buckling was zero.
 - The rotate_counterclockwise method on DiffusionData was not correctly implemented.
+- Periodic boundary conditions were not being treated correctly in CMFD.
+- The function for determining a nuclide ZAm number from a name string did not work
+  correctly for names with a TSL identifier that contained a number (i.e. H1_H2O).
 
 ------------
 Contributors
