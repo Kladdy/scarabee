@@ -1,7 +1,7 @@
 [build-system]
 requires = [
   "scikit-build-core>=0.10",
-  "pybind11==3.0.1",
+  "pybind11==3.0.2",
   "mypy",
   "numpy",
   "scipy"
@@ -14,7 +14,7 @@ cmake.build-type = "Release"
 
 [project]
 name = "scarabee"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
   {name = "Hunter Belanger", email = "hunter.belanger@gmail.com"},
 ]

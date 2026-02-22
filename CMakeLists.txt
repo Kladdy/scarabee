@@ -44,10 +44,10 @@ FetchContent_MakeAvailable(eigen)
 
 #===============================================================================
 # Get SPDLOG
-message(STATUS "Downloading spdlog v1.16.0")
+message(STATUS "Downloading spdlog v1.17.0")
 FetchContent_Declare(spdlog
-  URL      https://github.com/gabime/spdlog/archive/refs/tags/v1.16.0.tar.gz
-  URL_HASH MD5=7e963629c9075b628e765896e057521f
+  URL      https://github.com/gabime/spdlog/archive/refs/tags/v1.17.0.tar.gz
+  URL_HASH MD5=f0d8dd02539fe609bdfd42c0549fe28d
   EXCLUDE_FROM_ALL
 )
 set(SPDLOG_BUILD_PIC ON CACHE BOOL "Build position independent code (-fPIC)")
@@ -65,10 +65,10 @@ FetchContent_MakeAvailable(htl)
 
 #===============================================================================
 # Get XTL
-message(STATUS "Downloading xtl v0.8.1")
+message(STATUS "Downloading xtl v0.8.2")
 FetchContent_Declare(xtl
-  URL      https://github.com/xtensor-stack/xtl/archive/refs/tags/0.8.1.tar.gz
-  URL_HASH MD5=fe52514ffeb7e54a031b9d4f57090d48
+  URL      https://github.com/xtensor-stack/xtl/archive/refs/tags/0.8.2.tar.gz
+  URL_HASH MD5=a5a5b86d5695baff39fc9943481b2b5b
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(xtl)
@@ -100,14 +100,14 @@ set(PYBIND11_NEWPYTHON ON)
 find_package(pybind11 CONFIG QUIET)
 if (NOT pybind11_FOUND)
   set(PYBIND11_FINDPYTHON ON)
-  message(STATUS "Downloading pybind11 v3.0.1")
+  message(STATUS "Downloading pybind11 v3.0.2")
   FetchContent_Declare(pybind11
-    URL https://github.com/pybind/pybind11/archive/refs/tags/v3.0.1.tar.gz
-    URL_HASH MD5=81399a5277559163b3ee912b41de1b76
+    URL https://github.com/pybind/pybind11/archive/refs/tags/v3.0.2.tar.gz
+    URL_HASH MD5=6d7134a90dab46b0a7f7bcf9c05aa10c
   )
   FetchContent_MakeAvailable(pybind11)
   if (NOT pybind11_VERSION)
-    set(pybind11_VERSION 3.0.1)
+    set(pybind11_VERSION 3.0.2)
   endif()
 endif()
 
@@ -158,8 +158,8 @@ FetchContent_MakeAvailable(HighFive)
 # Get ImApp
 message(STATUS "Downloading ImApp")
 FetchContent_Declare(ImApp
-  URL      https://github.com/HunterBelanger/ImApp/archive/7bcee00689165944ca608266ce31ee9ea488ef3f.tar.gz
-  URL_HASH MD5=b9ef619c5550bfb8435ecd7328cfdb21
+  URL      https://github.com/HunterBelanger/ImApp/archive/d71f8ae1e878cc127ddec5a1d4e6eafdda362afc.tar.gz
+  URL_HASH MD5=794c946bdf3246dc89c0cc7398a0cd37
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(ImApp)
