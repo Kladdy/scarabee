@@ -158,8 +158,8 @@ FetchContent_MakeAvailable(HighFive)
 # Get ImApp
 message(STATUS "Downloading ImApp")
 FetchContent_Declare(ImApp
-  URL      https://github.com/HunterBelanger/ImApp/archive/d71f8ae1e878cc127ddec5a1d4e6eafdda362afc.tar.gz
-  URL_HASH MD5=794c946bdf3246dc89c0cc7398a0cd37
+  URL      https://github.com/HunterBelanger/ImApp/archive/a57eca8f4e837a4179395dcffa054e1019df6729.tar.gz
+  URL_HASH MD5=c290a15983be94c499927c505d7827ec
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(ImApp)
