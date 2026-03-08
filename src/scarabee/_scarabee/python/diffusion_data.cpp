@@ -289,11 +289,12 @@ void init_DiffusionData(py::module& m) {
                   py::arg("fname"))
 
       .def("__deepcopy__",
-           [](const DiffusionData& xs, py::dict) {
+           [](const DiffusionData& dd, py::dict) {
              DiffusionData out(
-                 std::make_shared<DiffusionCrossSection>(*xs.xs()));
-             out.set_adf(xs.adf());
-             out.set_cdf(xs.cdf());
+                 std::make_shared<DiffusionCrossSection>(*dd.xs()));
+             out.set_adf(dd.adf());
+             out.set_cdf(dd.cdf());
+             out.set_leakage_corrections(dd.leakage_corrections());
              return out;
            })
 
