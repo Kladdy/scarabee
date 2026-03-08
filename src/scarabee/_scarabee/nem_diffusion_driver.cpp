@@ -8,9 +8,7 @@
 
 #include <array>
 #include <cmath>
-#include <cstdarg>
 #include <fstream>
-#include <optional>
 
 namespace scarabee {
 
@@ -675,48 +673,28 @@ void NEMDiffusionDriver::calc_node(const std::size_t g, const std::size_t m,
   update_Jin_from_Jout(g, m);
 }
 
-double NEMDiffusionDriver::calc_avg_node_buckling(const std::size_t g,
-                                                  const std::size_t m,
-                                                  const double invs_dx,
-                                                  const double invs_dy,
-                                                  const double invs_dz) const {
+double NEMDiffusionDriver::calc_avg_node_DB2(const std::size_t g,
+                                             const std::size_t m,
+                                             const double dx, const double dy,
+                                             const double dz) const {
   // For the given node, grab the partial currents
   const auto& Jin = j_in_out_(g, m, 0);
   const auto& Jout = j_in_out_(g, m, 1);
-
-  // Obtain avg flux and second flux moments
   const double flx_avg = flux_(g, m, MomentIndx::AVG);
-  const double flx_x2 = flux_(g, m, MomentIndx::X2);
-  const double flx_y2 = flux_(g, m, MomentIndx::Y2);
-  const double flx_z2 = flux_(g, m, MomentIndx::Z2);
 
-  // From the partial currents, compute the surface fluxes
-  const double flx_xp = 2. * (Jout(CurrentIndx::XP) + Jin(CurrentIndx::XP));
-  const double flx_xm = 2. * (Jout(CurrentIndx::XM) + Jin(CurrentIndx::XM));
-  const double flx_yp = 2. * (Jout(CurrentIndx::YP) + Jin(CurrentIndx::YP));
-  const double flx_ym = 2. * (Jout(CurrentIndx::YM) + Jin(CurrentIndx::YM));
-  const double flx_zp = 2. * (Jout(CurrentIndx::ZP) + Jin(CurrentIndx::ZP));
-  const double flx_zm = 2. * (Jout(CurrentIndx::ZM) + Jin(CurrentIndx::ZM));
+  double DB2 = 0.;
+  DB2 += dy * dz *
+         (-calc_net_current(Jin, Jout, CurrentIndx::XM) +
+          calc_net_current(Jin, Jout, CurrentIndx::XP));
+  DB2 += dx * dz *
+         (-calc_net_current(Jin, Jout, CurrentIndx::YM) +
+          calc_net_current(Jin, Jout, CurrentIndx::YP));
+  DB2 += dx * dy *
+         (-calc_net_current(Jin, Jout, CurrentIndx::ZM) +
+          calc_net_current(Jin, Jout, CurrentIndx::ZP));
+  DB2 /= flx_avg * dx * dy * dz;
 
-  // From surface fluxes, compute the a2 parameter for each direction
-  const double ax2 = flx_xp + flx_xm - 2. * flx_avg;
-  const double ay2 = flx_yp + flx_ym - 2. * flx_avg;
-  const double az2 = flx_zp + flx_zm - 2. * flx_avg;
-
-  // From second flux moments and a2s, compute a4s
-  const double ax4 = 35. * ax2 - flx_x2 * 700.;
-  const double ay4 = 35. * ay2 - flx_y2 * 700.;
-  const double az4 = 35. * az2 - flx_z2 * 700.;
-
-  // Compute average value of the laplacian within the node
-  const double avg_laplacian =
-      invs_dz * invs_dz * ((2. * az4 / 5.) + 6. * az2) +
-      invs_dy * invs_dy * ((2. * ay4 / 5.) + 6. * ay2) +
-      invs_dx * invs_dx * ((2. * ax4 / 5.) + 6. * ax2);
-
-  // Divide average laplacian by average flux to get an approximation for the
-  // buckling
-  return -avg_laplacian / flx_avg;
+  return DB2;
 }
 
 void NEMDiffusionDriver::update_node_xs_and_matrices() {
@@ -732,16 +710,11 @@ void NEMDiffusionDriver::update_node_xs_and_matrices() {
     const double del_x = geom_->dx(geom_indx[0]);
     const double del_y = geom_->dy(geom_indx[1]);
     const double del_z = geom_->dz(geom_indx[2]);
-    const double invs_dx = 1. / del_x;
-    const double invs_dy = 1. / del_y;
-    const double invs_dz = 1. / del_z;
     auto& xs = *mats_[m];
 
     for (std::size_t g_in = 0; g_in < NG_; g_in++) {
-      // Compute node/group buckling, leakage, and leakage to loss ratio
-      const double B2 =
-          this->calc_avg_node_buckling(g_in, m, invs_dx, invs_dy, invs_dz);
-      const double DB2 = xs.D(g_in) * B2;
+      // Compute node/group leakage to loss ratio
+      const double DB2 = this->calc_avg_node_DB2(g_in, m, del_x, del_y, del_z);
       const double LRr = DB2 / xs.Er(g_in);
 
       // Can now determine fractional change in each group cross section

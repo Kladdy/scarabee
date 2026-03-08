@@ -15,10 +15,10 @@
 
 #include <xtensor/containers/xtensor.hpp>
 
-#include <array>
 #include <cmath>
 #include <memory>
-#include <tuple>
+#include <optional>
+#include <utility>
 
 namespace scarabee {
 
@@ -156,9 +156,9 @@ class NEMDiffusionDriver {
   void calc_node(const std::size_t g, const std::size_t m, const double invs_dx,
                  const double invs_dy, const double invs_dz,
                  const DiffusionCrossSection& xs);
-  double calc_avg_node_buckling(const std::size_t g, const std::size_t m,
-                                const double invs_dx, const double invs_dy,
-                                const double invs_dz) const;
+  double calc_avg_node_DB2(const std::size_t g, const std::size_t m,
+                           const double dx, const double dy,
+                           const double dz) const;
   void update_node_xs_and_matrices();
   void inner_iteration();
 
