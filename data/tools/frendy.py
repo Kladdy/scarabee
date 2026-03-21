@@ -15,6 +15,10 @@ _U238_ace_path = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "U238_600.txt"
 )
 
+# TODO: The files 'U235.endf' and 'U238.endf' used by the two calls to FRENDY below
+# are based on ENDF/B-VIII.0. In the future, these should be changed to use
+# the same library as the one used for generating the cross sections.
+# See https://github.com/scarabee-dev/scarabee/pull/19#issuecomment-3649341167
 if not os.path.exists(_U235_ace_path):
     orig_dir = os.getcwd()
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
