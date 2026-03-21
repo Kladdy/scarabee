@@ -19,17 +19,17 @@ class Nuclide:
         Mass number (e.g., 242).
     is_fission_product : bool
         Whether the nuclide is a fission product, default False.
-    is_metastable : bool
-        Whether the nuclide is a metastable/isomeric state, default False.
+    metastable_state : int | None
+        The metastable state of the nuclide, default None.
     """
     symbol: str
     Z: int
     A: int
     is_fission_product: bool = False
-    is_metastable: bool = False
+    metastable_state: int | None = None
 
     def label(self):
-        metastable_str = "m" if self.is_metastable else ""
+        metastable_str = f"m{self.metastable_state}" if self.metastable_state is not None else ""
         return f"{self.symbol}{self.A}{metastable_str}"
 
 @dataclass
@@ -147,13 +147,13 @@ class ENDFLibrary:
         """
         match self.label:
             case "endf71" | "endf80" | "endf81":
-                metastable_suffix = "m1" if nuclide.is_metastable else ""
+                metastable_suffix = f"m{nuclide.metastable_state}" if nuclide.metastable_state is not None else ""
                 return f"n-{nuclide.Z:03d}_{nuclide.symbol}_{nuclide.A:03d}{metastable_suffix}.endf"
             case "jeff33":
-                metastable_suffix = "m" if nuclide.is_metastable else "g"
+                metastable_suffix = "m" if nuclide.metastable_state is not None else "g"
                 return f"{nuclide.Z}-{nuclide.symbol}-{nuclide.A}{metastable_suffix}.jeff33"
             case "jeff40":
-                metastable_suffix = "m" if nuclide.is_metastable else "g"
+                metastable_suffix = "m" if nuclide.metastable_state is not None else "g"
                 return f"n_{nuclide.Z}-{nuclide.symbol}-{nuclide.A:03d}{metastable_suffix}.jeff"
             case _:
                 raise ValueError(f"Unknown library label: {self.label}")
