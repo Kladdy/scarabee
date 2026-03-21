@@ -77,6 +77,11 @@ std::uint32_t nuclide_name_to_za(const std::string& name) {
   }
 
   const char first_letter = name[0];
+  if (std::isupper(first_letter) == false) {
+    const auto mssg = "Nuclide name must begin with a captial letter.";
+    spdlog::error(mssg);
+    throw ScarabeeException(mssg);
+  }
 
   char second_letter = '\0';
   bool second_is_letter = false;
@@ -115,6 +120,9 @@ std::uint32_t nuclide_name_to_za(const std::string& name) {
   for (const auto c : name) {
     const bool c_is_digit = std::isdigit(c);
 
+    // Don't try parsing the trailing TSL name
+    if (c_is_digit == false && c == '_') break;
+
     if (store_m && c_is_digit) {
       m = static_cast<std::uint32_t>(c - '0');
 
@@ -127,7 +135,7 @@ std::uint32_t nuclide_name_to_za(const std::string& name) {
       throw ScarabeeException(mssg);
     }
 
-    if (store_A == false and c_is_digit) {
+    if (store_A == false && c_is_digit) {
       store_A = true;
     }
 
@@ -147,6 +155,18 @@ std::uint32_t nuclide_name_to_za(const std::string& name) {
         break;
       }
     }
+  }
+
+  if (A >= 300) {
+    const auto mssg = "Nuclide atomic mass number must be < 300.";
+    spdlog::error(mssg);
+    throw ScarabeeException(mssg);
+  }
+
+  if (m >= 5) {
+    const auto mssg = "Nuclide isomer number must be < 5.";
+    spdlog::error(mssg);
+    throw ScarabeeException(mssg);
   }
 
   return (Z * 1000 + A) * 10 + m;
