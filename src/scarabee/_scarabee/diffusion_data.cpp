@@ -11,7 +11,7 @@
 namespace scarabee {
 
 DiffusionData::DiffusionData(std::shared_ptr<DiffusionCrossSection> xs)
-    : xs_(xs), form_factors_(), adf_(), cdf_(), name_() {
+    : xs_(xs), adf_(), cdf_(), name_() {
   if (xs_ == nullptr) {
     auto mssg = "Diffusion cross section is None.";
     spdlog::error(mssg);
@@ -20,43 +20,30 @@ DiffusionData::DiffusionData(std::shared_ptr<DiffusionCrossSection> xs)
 }
 
 DiffusionData::DiffusionData(std::shared_ptr<DiffusionCrossSection> xs,
-                             const xt::xtensor<double, 2>& form_factors)
-    : xs_(xs), form_factors_(), adf_(), cdf_(), name_() {
-  if (xs_ == nullptr) {
-    auto mssg = "Diffusion cross section is None.";
-    spdlog::error(mssg);
-    throw ScarabeeException(mssg);
-  }
-
-  this->set_form_factors(form_factors);
-}
-
-DiffusionData::DiffusionData(std::shared_ptr<DiffusionCrossSection> xs,
-                             const xt::xtensor<double, 2>& form_factors,
                              const xt::xtensor<double, 2>& adf,
                              const xt::xtensor<double, 2>& cdf)
-    : xs_(xs), form_factors_(), adf_(), cdf_(), name_() {
+    : xs_(xs), adf_(), cdf_(), name_() {
   if (xs_ == nullptr) {
     auto mssg = "Diffusion cross section is None.";
     spdlog::error(mssg);
     throw ScarabeeException(mssg);
   }
 
-  this->set_form_factors(form_factors);
   this->set_adf(adf);
   this->set_cdf(cdf);
 }
 
-void DiffusionData::set_form_factors(const xt::xtensor<double, 2>& ff) {
-  for (std::size_t i = 0; i < ff.size(); i++) {
-    if (ff.flat(i) < 0.) {
-      auto mssg = "Form factors must be positive.";
-      spdlog::error(mssg);
-      throw ScarabeeException(mssg);
-    }
+void DiffusionData::set_leakage_corrections(
+    const std::optional<LeakageCorrections>& lc) {
+  if (lc && lc->ngroups() != this->ngroups()) {
+    auto mssg =
+        "Number of groups in provided LeakageCorrections does not match number "
+        "of groups in DiffusionData.";
+    spdlog::error(mssg);
+    throw ScarabeeException(mssg);
   }
 
-  form_factors_ = ff;
+  leakage_corrections_ = lc;
 }
 
 void DiffusionData::set_adf(const xt::xtensor<double, 2>& adf) {
@@ -111,17 +98,7 @@ void DiffusionData::set_cdf(const xt::xtensor<double, 2>& cdf) {
   cdf_ = cdf;
 }
 
-void DiffusionData::rotate_clockwise() {
-  if (form_factors_.size() > 0) {
-    xt::xtensor<double, 2> temp;
-
-    // First transpose the matrix
-    temp = xt::transpose(form_factors_);
-
-    // Now we reverse each row
-    form_factors_ = xt::flip(temp, 1);
-  }
-
+DiffusionData& DiffusionData::rotate_clockwise() {
   // Must now swap ADF
   if (adf_.size() > 0) {
     for (std::size_t g = 0; g < this->ngroups(); g++) {
@@ -145,19 +122,11 @@ void DiffusionData::rotate_clockwise() {
       cdf_(g, CDF::IV) = temp2;
     }
   }
+
+  return *this;
 }
 
-void DiffusionData::rotate_counterclockwise() {
-  if (form_factors_.size() > 0) {
-    xt::xtensor<double, 2> temp;
-
-    // First we reverse each row
-    temp = xt::flip(form_factors_, 1);
-
-    // Now transpose the matrix
-    form_factors_ = xt::transpose(temp);
-  }
-
+DiffusionData& DiffusionData::rotate_counterclockwise() {
   // Must now swap ADF
   if (adf_.size() > 0) {
     for (std::size_t g = 0; g < this->ngroups(); g++) {
@@ -166,7 +135,7 @@ void DiffusionData::rotate_counterclockwise() {
       adf_(g, ADF::XN) = adf_(g, ADF::YP);
       adf_(g, ADF::YP) = adf_(g, ADF::XP);
       adf_(g, ADF::XP) = adf_(g, ADF::YN);
-      adf_(g, ADF::YP) = temp2;
+      adf_(g, ADF::YN) = temp2;
     }
   }
 
@@ -181,6 +150,46 @@ void DiffusionData::rotate_counterclockwise() {
       cdf_(g, CDF::II) = temp2;
     }
   }
+
+  return *this;
+}
+
+DiffusionData& DiffusionData::reflect_across_x_axis() {
+  // In this case, the y-side ADFs switch, and CDFs switch along y
+  if (adf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(adf_(g, ADF::YN), adf_(g, ADF::YP));
+    }
+  }
+
+  // Finally, swap CDF
+  if (cdf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(cdf_(g, CDF::I), cdf_(g, CDF::IV));
+      std::swap(cdf_(g, CDF::II), cdf_(g, CDF::III));
+    }
+  }
+
+  return *this;
+}
+
+DiffusionData& DiffusionData::reflect_across_y_axis() {
+  // In this case, the x-side ADFs switch, and CDFs switch along x
+  if (adf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(adf_(g, ADF::XN), adf_(g, ADF::XP));
+    }
+  }
+
+  // Finally, swap CDF
+  if (cdf_.size() > 0) {
+    for (std::size_t g = 0; g < this->ngroups(); g++) {
+      std::swap(cdf_(g, CDF::I), cdf_(g, CDF::II));
+      std::swap(cdf_(g, CDF::III), cdf_(g, CDF::IV));
+    }
+  }
+
+  return *this;
 }
 
 void DiffusionData::save(const std::string& fname) const {

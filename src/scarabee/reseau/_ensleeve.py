@@ -60,9 +60,9 @@ def _ensleeve_quarter(
     # Get the FSR IDs for all the gap cells
     gap_fsr_ids = []
     for cell in right_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in top_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
 
     return sleeved_geom, gap_fsr_ids
 
@@ -142,11 +142,11 @@ def _ensleeve_half_top(
     # Get the FSR IDs for all the gap cells
     gap_fsr_ids = []
     for cell in left_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in right_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in top_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
 
     return sleeved_geom, gap_fsr_ids
 
@@ -228,11 +228,11 @@ def _ensleeve_half_right(
     # Get the FSR IDs for all the gap cells
     gap_fsr_ids = []
     for cell in right_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in top_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in bot_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
 
     return sleeved_geom, gap_fsr_ids
 
@@ -336,12 +336,12 @@ def _ensleeve_full(
     # Get the FSR IDs for all the gap cells
     gap_fsr_ids = []
     for cell in left_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in right_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in top_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
     for cell in bot_gap_tiles:
-        gap_fsr_ids.append(cell.get_all_fsr_ids())
+        gap_fsr_ids += cell.get_all_fsr_ids()
 
     return sleeved_geom, gap_fsr_ids

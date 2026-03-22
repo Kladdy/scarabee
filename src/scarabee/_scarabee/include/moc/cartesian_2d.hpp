@@ -95,27 +95,35 @@ class Cartesian2D {
 
   std::optional<TileIndex> get_tile_index(const Vector& r,
                                           const Direction& u) const {
-    for (std::size_t i = 0; i < nx(); i++) {
-      for (std::size_t j = 0; j < ny(); j++) {
-        // Get the surfaces that make up our tile
-        const auto& xl = x_bounds_[i];
-        const auto& xh = x_bounds_[i + 1];
-        const auto& yl = y_bounds_[j];
-        const auto& yh = y_bounds_[j + 1];
-
-        // Check if we are in the tile. If so, return index
-        if (xl->side(r, u) == Surface::Side::Positive &&
-            xh->side(r, u) == Surface::Side::Negative &&
-            yl->side(r, u) == Surface::Side::Positive &&
-            yh->side(r, u) == Surface::Side::Negative) {
-          return TileIndex{i, j};
-        }
+    // Get the x index
+    std::size_t i = 0;
+    bool found_i = false;
+    for (i = 0; i < nx(); i++) {
+      const auto& xl = x_bounds_[i];
+      const auto& xh = x_bounds_[i + 1];
+      if (xl->side(r, u) == Surface::Side::Positive &&
+          xh->side(r, u) == Surface::Side::Negative) {
+        found_i = true;
+        break;
       }
     }
+    if (found_i == false) return std::nullopt;
 
-    // If we get here, we weren't in any tile.
-    // Return nullopt
-    return std::nullopt;
+    // Get the y index
+    std::size_t j = 0;
+    bool found_j = false;
+    for (j = 0; j < ny(); j++) {
+      const auto& yl = y_bounds_[j];
+      const auto& yh = y_bounds_[j + 1];
+      if (yl->side(r, u) == Surface::Side::Positive &&
+          yh->side(r, u) == Surface::Side::Negative) {
+        found_j = true;
+        break;
+      }
+    }
+    if (found_j == false) return std::nullopt;
+
+    return TileIndex{i, j};
   }
 
   Vector get_tile_center(const TileIndex& ti) const {
@@ -185,7 +193,7 @@ class Cartesian2D {
 
   std::size_t get_num_fsr_instances(std::size_t id) const;
 
-  std::set<std::size_t> get_all_fsr_ids() const;
+  std::vector<std::size_t> get_all_fsr_ids() const;
 
   void fill_fsrs(std::map<std::size_t, const FlatSourceRegion*>& fsrs) const;
 

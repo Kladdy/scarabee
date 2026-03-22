@@ -86,38 +86,37 @@ class NodalFlux1D:
         for g in range(NG):
             Dg = xs.D(g)
             Dg_dx = Dg * invs_dx
-            # Use this for Et instead of 1/(3D), as that gave bad results.
-            Et = xs.Ea(g) + xs.Es(g)
             chi_g_keff = xs.chi(g) / keff
-            Erf_g = Et - xs.Es(g, g) - chi_g_keff * xs.vEf(g)
 
             # Each group has 4 equations. See reference [1].
 
             # Eq 2.54
-            A[j, g * 4 + 2] -= 0.5 * Dg_dx * invs_dx
-            A[j, g * 4 + 0] += Erf_g / 12.0
-            A[j, g * 4 + 2] -= 0.1 * (Erf_g / 12.0)
+            A[j, g * 4 + 0] += xs.Er(g) / 12.0  # a1
+            A[j, g * 4 + 2] -= xs.Er(g) / 120.0  # a3
+            A[j, g * 4 + 2] -= 0.5 * Dg_dx * invs_dx  # a3
             for gg in range(NG):
+                A[j, gg * 4 + 0] -= chi_g_keff * xs.vEf(gg) / 12.0  # a1
+                A[j, gg * 4 + 2] += chi_g_keff * xs.vEf(gg) / 120.0  # a3
                 if gg == g:
                     continue
-                A[j, gg * 4 + 0] -= xs.Es(gg, g) / 12.0
-                A[j, gg * 4 + 2] += 0.1 * (xs.Es(gg, g) / 12.0)
-                A[j, gg * 4 + 0] -= chi_g_keff * (xs.vEf(gg) / 12.0)
-                A[j, gg * 4 + 2] += 0.1 * chi_g_keff * (xs.vEf(gg) / 12.0)
+                A[j, gg * 4 + 0] -= xs.Es(gg, g) / 12.0  # a1
+                A[j, gg * 4 + 2] += xs.Es(gg, g) / 120.0  # a3
+
             b[j] = 0.0
             j += 1
 
             # Eq 2.55
-            A[j, g * 4 + 3] -= 0.2 * Dg_dx * invs_dx
-            A[j, g * 4 + 1] += Erf_g / 20.0
-            A[j, g * 4 + 3] -= Erf_g / (20.0 * 35.0)
+            A[j, g * 4 + 1] += xs.Er(g) / 20.0  # a2
+            A[j, g * 4 + 3] -= xs.Er(g) / 700.0  # a4
+            A[j, g * 4 + 3] -= 0.2 * Dg_dx * invs_dx  # a4
             for gg in range(NG):
+                A[j, gg * 4 + 1] -= chi_g_keff * xs.vEf(gg) / 20.0  # a2
+                A[j, gg * 4 + 3] += chi_g_keff * xs.vEf(gg) / 700.0  # a4
                 if gg == g:
                     continue
-                A[j, gg * 4 + 1] -= xs.Es(gg, g) / 20.0
-                A[j, gg * 4 + 3] += xs.Es(gg, g) / (20.0 * 35.0)
-                A[j, gg * 4 + 1] -= chi_g_keff * (xs.vEf(gg) / 20.0)
-                A[j, gg * 4 + 3] += chi_g_keff * (xs.vEf(gg) / (20.0 * 35.0))
+                A[j, gg * 4 + 1] -= xs.Es(gg, g) / 20.0  # a2
+                A[j, gg * 4 + 3] += xs.Es(gg, g) / 700.0  # a4
+
             b[j] = 0.0
             j += 1
 
@@ -146,26 +145,28 @@ class NodalFlux1D:
             self.a[g, 0] = avg_flx[g]
             self.a[g, 1:] = a_tmp[g * 4 : g * 4 + 4]
 
-    def __call__(self, x: float, g: int) -> float:
+    def __call__(
+        self, x: float | np.ndarray, g: int | None = None
+    ) -> float | np.ndarray:
         """
         Evaluates the nodal flux at position x in group g.
 
         Parameters
         ----------
-        x : float
-            Position for the flux evaluation.
-        g : int
-            Energy group for the flux evaluation.
+        x : float | np.ndarray
+            Position or array of positions for the flux evaluation.
+        g : int | None
+            Energy group for the flux evaluation. If none, array for all groups is returned.
 
         Returns
         -------
-        float
-            Nodal flux
+        float | np.ndarray
+            Nodal flux in group g, or in all groups
         """
-        if g < 0:
+        if g is not None and g < 0:
             raise RuntimeError("Group index g must be >= 0.")
 
-        if g >= self.ngroups:
+        if g is not None and g >= self.ngroups:
             raise RuntimeError("Group index g is out of range.")
 
         # Commented out to permit use with an array
@@ -179,18 +180,28 @@ class NodalFlux1D:
 
         u = ((x - self.x_min) / (self.x_max - self.x_min)) - 0.5
         u2 = u * u
+
         f1 = u
         f2 = 3.0 * u2 - 0.25
-        f3 = (u2 - 0.25) * u
-        f4 = (u2 - 0.25) * (u2 - 0.05)
+        f3 = u * (u - 0.5) * (u + 0.5)
+        f4 = (u2 - (1.0 / 20.0)) * (u - 0.5) * (u + 0.5)
 
-        flx = (
-            self.a[g, 0]
-            + self.a[g, 1] * f1
-            + self.a[g, 2] * f2
-            + self.a[g, 3] * f3
-            + self.a[g, 4] * f4
-        )
+        if g is None:
+            flx = (
+                self.a[:, 0]
+                + self.a[:, 1] * f1
+                + self.a[:, 2] * f2
+                + self.a[:, 3] * f3
+                + self.a[:, 4] * f4
+            )
+        else:
+            flx = (
+                self.a[g, 0]
+                + self.a[g, 1] * f1
+                + self.a[g, 2] * f2
+                + self.a[g, 3] * f3
+                + self.a[g, 4] * f4
+            )
 
         return flx
 

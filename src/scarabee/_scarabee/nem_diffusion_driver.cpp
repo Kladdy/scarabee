@@ -8,9 +8,7 @@
 
 #include <array>
 #include <cmath>
-#include <cstdarg>
 #include <fstream>
-#include <optional>
 
 namespace scarabee {
 
@@ -102,6 +100,81 @@ double NEMDiffusionDriver::calc_flux_error(
   return max_diff;
 }
 
+void NEMDiffusionDriver::fill_node_coupling_matrices(
+    std::size_t g, std::size_t m, const DiffusionCrossSection& xs,
+    const double del_x, const double del_y, const double del_z) {
+  const double D = xs.D(g);
+  const double Er = xs.Er(g);
+  const double dx = D / del_x;
+  const double dy = D / del_y;
+  const double dz = D / del_z;
+  const double lx = 1. / (Er * del_x);
+  const double ly = 1. / (Er * del_y);
+  const double lz = 1. / (Er * del_z);
+
+  // Create matrices
+  const double ax = 1. + 32. * dx + 120. * dx * lx + 960. * dx * dx * lx +
+                    840. * dx * dx * lx * lx;
+  const double ay = 1. + 32. * dy + 120. * dy * ly + 960. * dy * dy * ly +
+                    840. * dy * dy * ly * ly;
+  const double az = 1. + 32. * dz + 120. * dz * lz + 960. * dz * dz * lz +
+                    840. * dz * dz * lz * lz;
+  const double ax1 =
+      8. * dx + 60. * dx * lx + 720. * dx * dx * lx + 840. * dx * dx * lx * lx;
+  const double ay1 =
+      8. * dy + 60. * dy * ly + 720. * dy * dy * ly + 840. * dy * dy * ly * ly;
+  const double az1 =
+      8. * dz + 60. * dz * lz + 720. * dz * dz * lz + 840. * dz * dz * lz * lz;
+  const double xy = 20. * dx * ly + 840. * dx * dx * lx * ly;
+  const double xz = 20. * dx * lz + 840. * dx * dx * lx * lz;
+  const double yx = 20. * dy * lx + 840. * dy * dy * ly * lx;
+  const double yz = 20. * dy * lz + 840. * dy * dy * ly * lz;
+  const double zx = 20. * dz * lx + 840. * dz * dz * lz * lx;
+  const double zy = 20. * dz * ly + 840. * dz * dz * lz * ly;
+
+  Eigen::Matrix<double, 6, 6> A{
+      {ax, ax1, xy, xy, xz, xz}, {ax1, ax, xy, xy, xz, xz},
+      {yx, yx, ay, ay1, yz, yz}, {yx, yx, ay1, ay, yz, yz},
+      {zx, zx, zy, zy, az, az1}, {zx, zx, zy, zy, az1, az}};
+
+  const double bx = 1. - 32. * dx + 120. * dx * lx - 960. * dx * dx * lx +
+                    840. * dx * dx * lx * lx;
+  const double by = 1. - 32. * dy + 120. * dy * ly - 960. * dy * dy * ly +
+                    840. * dy * dy * ly * ly;
+  const double bz = 1. - 32. * dz + 120. * dz * lz - 960. * dz * dz * lz +
+                    840. * dz * dz * lz * lz;
+  const double bx1 =
+      -8. * dx + 60. * dx * lx - 720. * dx * dx * lx + 840. * dx * dx * lx * lx;
+  const double by1 =
+      -8. * dy + 60. * dy * ly - 720. * dy * dy * ly + 840. * dy * dy * ly * ly;
+  const double bz1 =
+      -8. * dz + 60. * dz * lz - 720. * dz * dz * lz + 840. * dz * dz * lz * lz;
+
+  Eigen::Matrix<double, 6, 6> B{
+      {bx, bx1, xy, xy, xz, xz}, {bx1, bx, xy, xy, xz, xz},
+      {yx, yx, by, by1, yz, yz}, {yx, yx, by1, by, yz, yz},
+      {zx, zx, zy, zy, bz, bz1}, {zx, zx, zy, zy, bz1, bz}};
+
+  const double cx = 20. * dx * lx * del_x + 840. * dx * dx * lx * lx * del_x;
+  const double cy = 20. * dy * ly * del_y + 840. * dy * dy * ly * ly * del_y;
+  const double cz = 20. * dz * lz * del_z + 840. * dz * dz * lz * lz * del_z;
+  const double cx1 = 60. * dx * lx * del_x;
+  const double cy1 = 60. * dy * ly * del_y;
+  const double cz1 = 60. * dz * lz * del_z;
+  const double cx2 = 140. * dx * lx * del_x;
+  const double cy2 = 140. * dy * ly * del_y;
+  const double cz2 = 140. * dz * lz * del_z;
+
+  Eigen::Matrix<double, 6, 7> C{
+      {cx, cx1, 0., 0., cx2, 0., 0.}, {cx, -cx1, 0., 0., cx2, 0., 0.},
+      {cy, 0., cy1, 0., 0., cy2, 0.}, {cy, 0., -cy1, 0., 0., cy2, 0.},
+      {cz, 0., 0., cz1, 0., 0., cz2}, {cz, 0., 0., -cz1, 0., 0., cz2}};
+
+  auto Ainvs = A.inverse();
+  Rmats_(g, m) = Ainvs * B;
+  Pmats_(g, m) = Ainvs * C;
+}
+
 void NEMDiffusionDriver::fill_coupling_matrices() {
   spdlog::info("Loading coupling matrices");
 
@@ -113,87 +186,25 @@ void NEMDiffusionDriver::fill_coupling_matrices() {
     const auto& xs = *mats_[m];
 
     for (std::size_t g = 0; g < NG_; g++) {
-      const double D = xs.D(g);
-      const double Er = xs.Er(g);
-      const double dx = D / del_x;
-      const double dy = D / del_y;
-      const double dz = D / del_z;
-      const double lx = 1. / (Er * del_x);
-      const double ly = 1. / (Er * del_y);
-      const double lz = 1. / (Er * del_z);
-
-      // Create matrices
-      const double ax = 1. + 32. * dx + 120. * dx * lx + 960. * dx * dx * lx +
-                        840. * dx * dx * lx * lx;
-      const double ay = 1. + 32. * dy + 120. * dy * ly + 960. * dy * dy * ly +
-                        840. * dy * dy * ly * ly;
-      const double az = 1. + 32. * dz + 120. * dz * lz + 960. * dz * dz * lz +
-                        840. * dz * dz * lz * lz;
-      const double ax1 = 8. * dx + 60. * dx * lx + 720. * dx * dx * lx +
-                         840. * dx * dx * lx * lx;
-      const double ay1 = 8. * dy + 60. * dy * ly + 720. * dy * dy * ly +
-                         840. * dy * dy * ly * ly;
-      const double az1 = 8. * dz + 60. * dz * lz + 720. * dz * dz * lz +
-                         840. * dz * dz * lz * lz;
-      const double xy = 20. * dx * ly + 840. * dx * dx * lx * ly;
-      const double xz = 20. * dx * lz + 840. * dx * dx * lx * lz;
-      const double yx = 20. * dy * lx + 840. * dy * dy * ly * lx;
-      const double yz = 20. * dy * lz + 840. * dy * dy * ly * lz;
-      const double zx = 20. * dz * lx + 840. * dz * dz * lz * lx;
-      const double zy = 20. * dz * ly + 840. * dz * dz * lz * ly;
-      Eigen::Matrix<double, 6, 6> A{
-          {ax, ax1, xy, xy, xz, xz}, {ax1, ax, xy, xy, xz, xz},
-          {yx, yx, ay, ay1, yz, yz}, {yx, yx, ay1, ay, yz, yz},
-          {zx, zx, zy, zy, az, az1}, {zx, zx, zy, zy, az1, az}};
-
-      const double bx = 1. - 32. * dx + 120. * dx * lx - 960. * dx * dx * lx +
-                        840. * dx * dx * lx * lx;
-      const double by = 1. - 32. * dy + 120. * dy * ly - 960. * dy * dy * ly +
-                        840. * dy * dy * ly * ly;
-      const double bz = 1. - 32. * dz + 120. * dz * lz - 960. * dz * dz * lz +
-                        840. * dz * dz * lz * lz;
-      const double bx1 = -8. * dx + 60. * dx * lx - 720. * dx * dx * lx +
-                         840. * dx * dx * lx * lx;
-      const double by1 = -8. * dy + 60. * dy * ly - 720. * dy * dy * ly +
-                         840. * dy * dy * ly * ly;
-      const double bz1 = -8. * dz + 60. * dz * lz - 720. * dz * dz * lz +
-                         840. * dz * dz * lz * lz;
-      Eigen::Matrix<double, 6, 6> B{
-          {bx, bx1, xy, xy, xz, xz}, {bx1, bx, xy, xy, xz, xz},
-          {yx, yx, by, by1, yz, yz}, {yx, yx, by1, by, yz, yz},
-          {zx, zx, zy, zy, bz, bz1}, {zx, zx, zy, zy, bz1, bz}};
-
-      const double cx =
-          20. * dx * lx * del_x + 840. * dx * dx * lx * lx * del_x;
-      const double cy =
-          20. * dy * ly * del_y + 840. * dy * dy * ly * ly * del_y;
-      const double cz =
-          20. * dz * lz * del_z + 840. * dz * dz * lz * lz * del_z;
-      const double cx1 = 60. * dx * lx * del_x;
-      const double cy1 = 60. * dy * ly * del_y;
-      const double cz1 = 60. * dz * lz * del_z;
-      const double cx2 = 140. * dx * lx * del_x;
-      const double cy2 = 140. * dy * ly * del_y;
-      const double cz2 = 140. * dz * lz * del_z;
-      Eigen::Matrix<double, 6, 7> C{
-          {cx, cx1, 0., 0., cx2, 0., 0.}, {cx, -cx1, 0., 0., cx2, 0., 0.},
-          {cy, 0., cy1, 0., 0., cy2, 0.}, {cy, 0., -cy1, 0., 0., cy2, 0.},
-          {cz, 0., 0., cz1, 0., 0., cz2}, {cz, 0., 0., -cz1, 0., 0., cz2}};
-
-      auto Ainvs = A.inverse();
-      Rmats_(g, m) = Ainvs * B;
-      Pmats_(g, m) = Ainvs * C;
+      this->fill_node_coupling_matrices(g, m, xs, del_x, del_y, del_z);
     }
   }
 }
 
 void NEMDiffusionDriver::fill_mats_adf() {
   // Save all material cross sections
+  diff_datas_.clear();
+  mats_.clear();
   mats_.reserve(NM_);
+  diff_datas_.reserve(NM_);
   for (std::size_t m = 0; m < NM_; m++) {
     const auto geom_indx = geom_inds_[m];
-    const auto& mat = geom_->mat(geom_indx)->xs();
-    mats_.push_back(mat);
+    const auto& diff_data = geom_->mat(geom_indx);
+    const auto& xs_ptr = diff_data->xs();
+    // Save hard copy of cross section that can be modified !
+    mats_.push_back(std::make_shared<DiffusionCrossSection>(*xs_ptr));
+    // We don't modify the DiffusionData !
+    diff_datas_.push_back(diff_data);
   }
 
   // Save all node ADFs
@@ -223,34 +234,13 @@ void NEMDiffusionDriver::fill_source() {
       for (std::size_t gg = 0; gg < NG_; gg++) {
         const double vEf_gg = mat->vEf(gg);
         const double Es_gg_g = mat->Es(gg, g);
-        const double flx_avg = flux_(gg, m, MomentIndx::AVG);
-        const double flx_x1 = flux_(gg, m, MomentIndx::X1);
-        const double flx_x2 = flux_(gg, m, MomentIndx::X2);
-        const double flx_y1 = flux_(gg, m, MomentIndx::Y1);
-        const double flx_y2 = flux_(gg, m, MomentIndx::Y2);
-        const double flx_z1 = flux_(gg, m, MomentIndx::Z1);
-        const double flx_z2 = flux_(gg, m, MomentIndx::Z2);
 
-        Q(MomentIndx::AVG) += invs_keff * chi_g * vEf_gg * flx_avg;
-        if (gg != g) Q(MomentIndx::AVG) += Es_gg_g * flx_avg;
-
-        Q(MomentIndx::X1) += invs_keff * chi_g * vEf_gg * flx_x1;
-        if (gg != g) Q(MomentIndx::X1) += Es_gg_g * flx_x1;
-
-        Q(MomentIndx::X2) += invs_keff * chi_g * vEf_gg * flx_x2;
-        if (gg != g) Q(MomentIndx::X2) += Es_gg_g * flx_x2;
-
-        Q(MomentIndx::Y1) += invs_keff * chi_g * vEf_gg * flx_y1;
-        if (gg != g) Q(MomentIndx::Y1) += Es_gg_g * flx_y1;
-
-        Q(MomentIndx::Y2) += invs_keff * chi_g * vEf_gg * flx_y2;
-        if (gg != g) Q(MomentIndx::Y2) += Es_gg_g * flx_y2;
-
-        Q(MomentIndx::Z1) += invs_keff * chi_g * vEf_gg * flx_z1;
-        if (gg != g) Q(MomentIndx::Z1) += Es_gg_g * flx_z1;
-
-        Q(MomentIndx::Z2) += invs_keff * chi_g * vEf_gg * flx_z2;
-        if (gg != g) Q(MomentIndx::Z2) += Es_gg_g * flx_z2;
+        // i is the moment index (Avg, X1, Y1, Z1, X2, Y2, Z2)
+        for (int mi = 0; mi < 7; mi++) {
+          const double flx = flux_(gg, m, static_cast<std::size_t>(mi));
+          Q(mi) += invs_keff * chi_g * vEf_gg * flx;
+          if (gg != g) Q(mi) += Es_gg_g * flx;
+        }
       }
     }
   }
@@ -264,23 +254,23 @@ void NEMDiffusionDriver::fill_neighbors_and_geom_inds() {
   for (std::size_t m = 0; m < NM_; m++) {
     geom_inds_(m) = geom_->geom_indx(m);
 
-    neighbors_(m, 0) = geom_->neighbor(m, DiffusionGeometry::Neighbor::XP);
-    neighbors_(m, 1) = geom_->neighbor(m, DiffusionGeometry::Neighbor::XN);
-    neighbors_(m, 2) = geom_->neighbor(m, DiffusionGeometry::Neighbor::YP);
-    neighbors_(m, 3) = geom_->neighbor(m, DiffusionGeometry::Neighbor::YN);
-    neighbors_(m, 4) = geom_->neighbor(m, DiffusionGeometry::Neighbor::ZP);
-    neighbors_(m, 5) = geom_->neighbor(m, DiffusionGeometry::Neighbor::ZN);
+    neighbors_(m, Neighbor::XP) = geom_->neighbor(m, Neighbor::XP);
+    neighbors_(m, Neighbor::XN) = geom_->neighbor(m, Neighbor::XN);
+    neighbors_(m, Neighbor::YP) = geom_->neighbor(m, Neighbor::YP);
+    neighbors_(m, Neighbor::YN) = geom_->neighbor(m, Neighbor::YN);
+    neighbors_(m, Neighbor::ZP) = geom_->neighbor(m, Neighbor::ZP);
+    neighbors_(m, Neighbor::ZN) = geom_->neighbor(m, Neighbor::ZN);
   }
 }
 
 void NEMDiffusionDriver::update_Jin_from_Jout(std::size_t g, std::size_t m) {
   // Get neighbor info
-  const auto& n_xp = neighbors_(m, 0);
-  const auto& n_xm = neighbors_(m, 1);
-  const auto& n_yp = neighbors_(m, 2);
-  const auto& n_ym = neighbors_(m, 3);
-  const auto& n_zp = neighbors_(m, 4);
-  const auto& n_zm = neighbors_(m, 5);
+  const auto& n_xp = neighbors_(m, Neighbor::XP);
+  const auto& n_xm = neighbors_(m, Neighbor::XN);
+  const auto& n_yp = neighbors_(m, Neighbor::YP);
+  const auto& n_ym = neighbors_(m, Neighbor::YN);
+  const auto& n_zp = neighbors_(m, Neighbor::ZP);
+  const auto& n_zm = neighbors_(m, Neighbor::ZN);
 
   // UPDATE INCOMING CURRENTS IN NEIGHBORING NODES / B.C.
   // x+ surface
@@ -399,12 +389,12 @@ NEMDiffusionDriver::MomentsVector NEMDiffusionDriver::calc_leakage_moments(
   const double Lz = Jzp - Jzm;
 
   // Get neighbor info
-  const auto& n_xp = neighbors_(m, 0);
-  const auto& n_xm = neighbors_(m, 1);
-  const auto& n_yp = neighbors_(m, 2);
-  const auto& n_ym = neighbors_(m, 3);
-  const auto& n_zp = neighbors_(m, 4);
-  const auto& n_zm = neighbors_(m, 5);
+  const auto& n_xp = neighbors_(m, Neighbor::XP);
+  const auto& n_xm = neighbors_(m, Neighbor::XN);
+  const auto& n_yp = neighbors_(m, Neighbor::YP);
+  const auto& n_ym = neighbors_(m, Neighbor::YN);
+  const auto& n_zp = neighbors_(m, Neighbor::ZP);
+  const auto& n_zm = neighbors_(m, Neighbor::ZN);
 
   // Obtain geometry spacings for node
   const auto geom_indxs = geom_inds_(m);
@@ -455,12 +445,12 @@ NEMDiffusionDriver::MomentsVector NEMDiffusionDriver::calc_leakage_moments(
     const double invs_denom = 1. / (p1xp * p1xm * (eta_xp + eta_xm + 1.));
 
     tmp = comp_avg_trans_lks(g, n_xp.second.value());
-    const double Ly_xp = n_xp.second ? tmp[1] : 0.;
-    const double Lz_xp = n_xp.second ? tmp[2] : 0.;
+    const double Ly_xp = tmp[1];
+    const double Lz_xp = tmp[2];
 
     tmp = comp_avg_trans_lks(g, n_xm.second.value());
-    const double Ly_xm = n_xm.second ? tmp[1] : 0.;
-    const double Lz_xm = n_xm.second ? tmp[2] : 0.;
+    const double Ly_xm = tmp[1];
+    const double Lz_xm = tmp[2];
 
     const double rho1yx = (p1xm * p2xm * Ly_xp - p1xp * p2xp * Ly_xm +
                            (p1xp * p2xp - p1xm * p2xm) * Ly) *
@@ -497,12 +487,12 @@ NEMDiffusionDriver::MomentsVector NEMDiffusionDriver::calc_leakage_moments(
     const double invs_denom = 1. / (p1yp * p1ym * (eta_yp + eta_ym + 1.));
 
     tmp = comp_avg_trans_lks(g, n_yp.second.value());
-    const double Lx_yp = n_yp.second ? tmp[0] : 0.;
-    const double Lz_yp = n_yp.second ? tmp[2] : 0.;
+    const double Lx_yp = tmp[0];
+    const double Lz_yp = tmp[2];
 
     tmp = comp_avg_trans_lks(g, n_ym.second.value());
-    const double Lx_ym = n_ym.second ? tmp[0] : 0.;
-    const double Lz_ym = n_ym.second ? tmp[2] : 0.;
+    const double Lx_ym = tmp[0];
+    const double Lz_ym = tmp[2];
 
     const double rho1xy = (p1ym * p2ym * Lx_yp - p1yp * p2yp * Lx_ym +
                            (p1yp * p2yp - p1ym * p2ym) * Lx) *
@@ -539,12 +529,12 @@ NEMDiffusionDriver::MomentsVector NEMDiffusionDriver::calc_leakage_moments(
     const double invs_denom = 1. / (p1zp * p1zm * (eta_zp + eta_zm + 1.));
 
     tmp = comp_avg_trans_lks(g, n_zp.second.value());
-    const double Lx_zp = n_zp.second ? tmp[0] : 0.;
-    const double Ly_zp = n_zp.second ? tmp[1] : 0.;
+    const double Lx_zp = tmp[0];
+    const double Ly_zp = tmp[1];
 
     tmp = comp_avg_trans_lks(g, n_zm.second.value());
-    const double Lx_zm = n_zm.second ? tmp[0] : 0.;
-    const double Ly_zm = n_zm.second ? tmp[1] : 0.;
+    const double Lx_zm = tmp[0];
+    const double Ly_zm = tmp[1];
 
     const double rho1xz = (p1zm * p2zm * Lx_zp - p1zp * p2zp * Lx_zm +
                            (p1zp * p2zp - p1zm * p2zm) * Lx) *
@@ -647,43 +637,106 @@ void NEMDiffusionDriver::calc_node(const std::size_t g, const std::size_t m,
   const double az2 = flx_zp + flx_zm - 2. * flx_avg;
 
   // Calculate the first flux moments
-  const double flx_x1 = (Q(MomentIndx::X1) - L(MomentIndx::X1) -
-                         0.5 * invs_dx * Tx - invs_dx * invs_dx * D * ax1) *
-                        invs_Er;
-  flux_(g, m, MomentIndx::X1) = flx_x1;
+  flux_(g, m, MomentIndx::X1) =
+      (Q(MomentIndx::X1) - L(MomentIndx::X1) - 0.5 * invs_dx * Tx -
+       invs_dx * invs_dx * D * ax1) *
+      invs_Er;
 
-  const double flx_y1 = (Q(MomentIndx::Y1) - L(MomentIndx::Y1) -
-                         0.5 * invs_dy * Ty - invs_dy * invs_dy * D * ay1) *
-                        invs_Er;
-  flux_(g, m, MomentIndx::Y1) = flx_y1;
+  flux_(g, m, MomentIndx::Y1) =
+      (Q(MomentIndx::Y1) - L(MomentIndx::Y1) - 0.5 * invs_dy * Ty -
+       invs_dy * invs_dy * D * ay1) *
+      invs_Er;
 
-  const double flx_z1 = (Q(MomentIndx::Z1) - L(MomentIndx::Z1) -
-                         0.5 * invs_dz * Tz - invs_dz * invs_dz * D * az1) *
-                        invs_Er;
-  flux_(g, m, MomentIndx::Z1) = flx_z1;
+  flux_(g, m, MomentIndx::Z1) =
+      (Q(MomentIndx::Z1) - L(MomentIndx::Z1) - 0.5 * invs_dz * Tz -
+       invs_dz * invs_dz * D * az1) *
+      invs_Er;
 
   // Calculate the second flux moments
-  const double flx_x2 =
+  flux_(g, m, MomentIndx::X2) =
       (Q(MomentIndx::X2) - L(MomentIndx::X2) - 0.5 * invs_dx * Lx -
        3. * invs_dx * invs_dx * D * ax2) *
       invs_Er;
-  flux_(g, m, MomentIndx::X2) = flx_x2;
 
-  const double flx_y2 =
+  flux_(g, m, MomentIndx::Y2) =
       (Q(MomentIndx::Y2) - L(MomentIndx::Y2) - 0.5 * invs_dy * Ly -
        3. * invs_dy * invs_dy * D * ay2) *
       invs_Er;
-  flux_(g, m, MomentIndx::Y2) = flx_y2;
 
-  const double flx_z2 =
+  flux_(g, m, MomentIndx::Z2) =
       (Q(MomentIndx::Z2) - L(MomentIndx::Z2) - 0.5 * invs_dz * Lz -
        3. * invs_dz * invs_dz * D * az2) *
       invs_Er;
-  flux_(g, m, MomentIndx::Z2) = flx_z2;
 
   //----------------------------------------------------------------------------
   // UPDATE INCOMING CURRENTS IN NEIGHBORING NODES / B.C.
   update_Jin_from_Jout(g, m);
+}
+
+double NEMDiffusionDriver::calc_avg_node_DB2(const std::size_t g,
+                                             const std::size_t m,
+                                             const double dx, const double dy,
+                                             const double dz) const {
+  // For the given node, grab the partial currents
+  const auto& Jin = j_in_out_(g, m, 0);
+  const auto& Jout = j_in_out_(g, m, 1);
+  const double flx_avg = flux_(g, m, MomentIndx::AVG);
+
+  double DB2 = 0.;
+  DB2 += dy * dz *
+         (-calc_net_current(Jin, Jout, CurrentIndx::XM) +
+          calc_net_current(Jin, Jout, CurrentIndx::XP));
+  DB2 += dx * dz *
+         (-calc_net_current(Jin, Jout, CurrentIndx::YM) +
+          calc_net_current(Jin, Jout, CurrentIndx::YP));
+  DB2 += dx * dy *
+         (-calc_net_current(Jin, Jout, CurrentIndx::ZM) +
+          calc_net_current(Jin, Jout, CurrentIndx::ZP));
+  DB2 /= flx_avg * dx * dy * dz;
+
+  return DB2;
+}
+
+void NEMDiffusionDriver::update_node_xs_and_matrices() {
+  // Go through all nodes and groups, updating the cross sections
+  for (std::size_t m = 0; m < NM_; m++) {
+    const auto& dd = *diff_datas_[m];
+    if (dd.leakage_corrections().has_value() == false || dd.reflector())
+      continue;
+    const auto& lc = dd.leakage_corrections().value();
+    const auto& sa_xs = *dd.xs();  // Single-Assembly (un-buckled) xs
+
+    const auto geom_indx = geom_inds_(m);
+    const double del_x = geom_->dx(geom_indx[0]);
+    const double del_y = geom_->dy(geom_indx[1]);
+    const double del_z = geom_->dz(geom_indx[2]);
+    auto& xs = *mats_[m];
+
+    for (std::size_t g_in = 0; g_in < NG_; g_in++) {
+      // Compute node/group leakage to loss ratio
+      const double DB2 = this->calc_avg_node_DB2(g_in, m, del_x, del_y, del_z);
+      const double LRr = DB2 / xs.Er(g_in);
+
+      // Can now determine fractional change in each group cross section
+      const double fD = lc.D(g_in) * LRr;
+      const double fEa = lc.Ea(g_in) * LRr;
+      const double fEf = lc.Ef(g_in) * LRr;
+      const double fvEf = lc.vEf(g_in) * LRr;
+
+      // Update the cross sections
+      xs.D_(g_in) = (fD + 1.) * sa_xs.D(g_in);
+      xs.Ea_(g_in) = (fEa + 1.) * sa_xs.Ea(g_in);
+      xs.Ef_(g_in) = (fEf + 1.) * sa_xs.Ef(g_in);
+      xs.vEf_(g_in) = (fvEf + 1.) * sa_xs.vEf(g_in);
+
+      for (std::size_t g_out = g_in + 1; g_out < NG_; g_out++) {
+        const double fEs = lc.Es(g_in, g_out) * LRr;
+        xs.Es_(g_in, g_out) = (fEs + 1.) * sa_xs.Es(g_in, g_out);
+      }
+
+      this->fill_node_coupling_matrices(g_in, m, xs, del_x, del_y, del_z);
+    }
+  }
 }
 
 void NEMDiffusionDriver::inner_iteration() {
@@ -771,6 +824,14 @@ void NEMDiffusionDriver::solve() {
     spdlog::info("     max flux difference: {:.5E}", flux_diff);
     spdlog::info("     iteration time: {:.5E} s",
                  iteration_timer.elapsed_time());
+
+    if (leakage_corrections() && iteration % 50 == 0) {
+      spdlog::info("-------------------------------------");
+      spdlog::info("");
+      spdlog::info("Updating cross sections and coupling matrices");
+      spdlog::info("");
+      this->update_node_xs_and_matrices();
+    }
   }
 
   solved_ = true;
@@ -786,7 +847,16 @@ void NEMDiffusionDriver::solve() {
 
   // Before reconstruction, we want to compute the average power in each node,
   // and then normalize by that.
-  const double avg_node_pwr = xt::mean(this->avg_power())();
+  const auto node_powers = this->avg_power();
+  double power_sum = 0.;
+  double nonzero_node_cntr = 0.;
+  for (std::size_t n = 0; n < node_powers.size(); n++) {
+    if (node_powers.flat(n) > 0.) {
+      power_sum += node_powers.flat(n);
+      nonzero_node_cntr += 1.;
+    }
+  }
+  const double avg_node_pwr = power_sum / nonzero_node_cntr;
   flux_ /= avg_node_pwr;
   j_in_out_ /= avg_node_pwr;
 
@@ -1049,85 +1119,6 @@ xt::xtensor<double, 3> NEMDiffusionDriver::power(
   }
 
   return pwr_out;
-}
-
-std::tuple<xt::xtensor<double, 3>, xt::xtensor<double, 1>,
-           xt::xtensor<double, 1>>
-NEMDiffusionDriver::pin_power(const xt::xtensor<double, 1>& z) const {
-  // First, we need to make sure all the assemblies have the same form factor
-  // shapes. If not, we cannot build a conforming mesh, and we complain.
-  std::optional<std::size_t> x_oshp = std::nullopt, y_oshp = std::nullopt;
-  for (const auto& tile : geom_->tiles()) {
-    if (tile.xs) {
-      const auto& ff = tile.xs->form_factors();
-      if (ff.size() > 0) {
-        if (x_oshp && y_oshp) {
-          if (y_oshp.value() != ff.shape()[0] ||
-              x_oshp.value() != ff.shape()[1]) {
-            auto mssg =
-                "Assemblies have varrying form factor shapes. "
-                "Cannot create a conformal mesh for pin power reconstruction.";
-            spdlog::error(mssg);
-            throw ScarabeeException(mssg);
-          }
-        } else {
-          y_oshp = ff.shape()[0];
-          x_oshp = ff.shape()[1];
-        }
-      }
-    }
-  }
-
-  if (x_oshp.has_value() == false || y_oshp.has_value() == false) {
-    auto mssg =
-        "No form factors provided on any assembly. "
-        "Cannot reconstruct pin powers.";
-    spdlog::error(mssg);
-    throw ScarabeeException(mssg);
-  }
-
-  const std::size_t x_shp = x_oshp.value();
-  const std::size_t y_shp = y_oshp.value();
-
-  // First, we need to create a mesh for the x and y points
-  xt::xtensor<double, 1> x =
-      xt::zeros<double>({x_shp * geom_->tile_dx().size() + 1});
-  std::size_t i = 1;
-  for (std::size_t xt = 0; xt < geom_->tile_dx().size(); xt++) {
-    const double tile_pitch = geom_->tile_dx()[xt] / static_cast<double>(x_shp);
-    for (std::size_t p = 0; p < x_shp; p++) {
-      x[i] = x[i - 1] + tile_pitch;
-      i++;
-    }
-  }
-
-  xt::xtensor<double, 1> y =
-      xt::zeros<double>({y_shp * geom_->tile_dy().size() + 1});
-  i = 1;
-  for (std::size_t yt = 0; yt < geom_->tile_dy().size(); yt++) {
-    const double tile_pitch = geom_->tile_dy()[yt] / static_cast<double>(y_shp);
-    for (std::size_t p = 0; p < y_shp; p++) {
-      y[i] = y[i - 1] + tile_pitch;
-      i++;
-    }
-  }
-
-  // We now load the powers
-  xt::xtensor<double, 3> pwr_out =
-      xt::zeros<double>({x.size() - 1, y.size() - 1, z.size()});
-  for (std::size_t i = 0; i < x.size() - 1; i++) {
-    const double xx = 0.5 * (x[i + 1] + x[i]);
-    for (std::size_t j = 0; j < y.size() - 1; j++) {
-      const double yy = 0.5 * (y[j + 1] + y[j]);
-      for (std::size_t k = 0; k < z.size(); k++) {
-        const double zz = z[k];
-
-        pwr_out(i, j, k) = power(xx, yy, zz) * geom_->form_factor(xx, yy, zz);
-      }
-    }
-  }
-
-  return {pwr_out, x, y};
 }
 
 xt::xtensor<double, 3> NEMDiffusionDriver::avg_power() const {
@@ -1394,8 +1385,8 @@ double NEMDiffusionDriver::avg_xy_corner_flux(std::size_t g, std::size_t m,
   denom += 1.;
 
   if (c == Corner::PP) {
-    const auto& n_xp = neighbors_(m, 0);
-    const auto& n_yp = neighbors_(m, 2);
+    const auto& n_xp = neighbors_(m, Neighbor::XP);
+    const auto& n_yp = neighbors_(m, Neighbor::YP);
 
     if (n_xp.second) {
       num += eval_heter_xy_corner_flux(g, n_xp.second.value(), Corner::MP);
@@ -1413,8 +1404,8 @@ double NEMDiffusionDriver::avg_xy_corner_flux(std::size_t g, std::size_t m,
       denom += 1.;
     }
   } else if (c == Corner::PM) {
-    const auto& n_xp = neighbors_(m, 0);
-    const auto& n_ym = neighbors_(m, 3);
+    const auto& n_xp = neighbors_(m, Neighbor::XP);
+    const auto& n_ym = neighbors_(m, Neighbor::YN);
 
     if (n_xp.second) {
       num += eval_heter_xy_corner_flux(g, n_xp.second.value(), Corner::MM);
@@ -1432,8 +1423,8 @@ double NEMDiffusionDriver::avg_xy_corner_flux(std::size_t g, std::size_t m,
       denom += 1.;
     }
   } else if (c == Corner::MM) {
-    const auto& n_xm = neighbors_(m, 1);
-    const auto& n_ym = neighbors_(m, 3);
+    const auto& n_xm = neighbors_(m, Neighbor::XN);
+    const auto& n_ym = neighbors_(m, Neighbor::YN);
 
     if (n_xm.second) {
       num += eval_heter_xy_corner_flux(g, n_xm.second.value(), Corner::PM);
@@ -1451,8 +1442,8 @@ double NEMDiffusionDriver::avg_xy_corner_flux(std::size_t g, std::size_t m,
       denom += 1.;
     }
   } else {  // c = Corner::MP
-    const auto& n_xm = neighbors_(m, 1);
-    const auto& n_yp = neighbors_(m, 2);
+    const auto& n_xm = neighbors_(m, Neighbor::XN);
+    const auto& n_yp = neighbors_(m, Neighbor::YP);
 
     if (n_xm.second) {
       num += eval_heter_xy_corner_flux(g, n_xm.second.value(), Corner::PP);

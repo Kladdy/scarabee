@@ -2,6 +2,7 @@
 #define SCARABEE_DIFFUSION_DATA_H
 
 #include <data/diffusion_cross_section.hpp>
+#include <diffusion/leakage_corrections.hpp>
 #include <utils/serialization.hpp>
 
 #include <xtensor/containers/xtensor.hpp>
@@ -9,8 +10,10 @@
 #include <cereal/cereal.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/memory.hpp>
+#include <cereal/types/optional.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace scarabee {
@@ -30,10 +33,6 @@ class DiffusionData {
   DiffusionData(std::shared_ptr<DiffusionCrossSection> xs);
 
   DiffusionData(std::shared_ptr<DiffusionCrossSection> xs,
-                const xt::xtensor<double, 2>& form_factors);
-
-  DiffusionData(std::shared_ptr<DiffusionCrossSection> xs,
-                const xt::xtensor<double, 2>& form_factors,
                 const xt::xtensor<double, 2>& adf,
                 const xt::xtensor<double, 2>& cdf);
 
@@ -125,8 +124,10 @@ class DiffusionData {
     }
   }
 
-  void rotate_clockwise();
-  void rotate_counterclockwise();
+  DiffusionData& rotate_clockwise();
+  DiffusionData& rotate_counterclockwise();
+  DiffusionData& reflect_across_x_axis();
+  DiffusionData& reflect_across_y_axis();
 
   const std::string& xs_name() const { return xs_->name(); }
 
@@ -135,8 +136,13 @@ class DiffusionData {
   const std::string& name() const { return name_; }
   void set_name(const std::string& new_name) { name_ = new_name; }
 
-  const xt::xtensor<double, 2>& form_factors() const { return form_factors_; }
-  void set_form_factors(const xt::xtensor<double, 2>& ff);
+  const std::optional<LeakageCorrections>& leakage_corrections() const {
+    return leakage_corrections_;
+  }
+  void set_leakage_corrections(const std::optional<LeakageCorrections>& lc);
+
+  bool reflector() const { return reflector_; }
+  void set_reflector(bool r) { reflector_ = r; }
 
   const xt::xtensor<double, 2>& adf() const { return adf_; }
   void set_adf(const xt::xtensor<double, 2>& adf);
@@ -149,17 +155,18 @@ class DiffusionData {
 
  private:
   std::shared_ptr<DiffusionCrossSection> xs_;
-  xt::xtensor<double, 2> form_factors_;
   xt::xtensor<double, 2> adf_;  // group then ADF direction
   xt::xtensor<double, 2> cdf_;  // group then CDF direction
   std::string name_;
+  std::optional<LeakageCorrections> leakage_corrections_;
+  bool reflector_{false};
 
   friend class cereal::access;
   DiffusionData() {}
   template <class Archive>
   void serialize(Archive& arc) {
-    arc(CEREAL_NVP(xs_), CEREAL_NVP(form_factors_), CEREAL_NVP(adf_),
-        CEREAL_NVP(cdf_), CEREAL_NVP(name_));
+    arc(CEREAL_NVP(xs_), CEREAL_NVP(adf_), CEREAL_NVP(cdf_), CEREAL_NVP(name_),
+        CEREAL_NVP(leakage_corrections_), CEREAL_NVP(reflector_));
   }
 };
 

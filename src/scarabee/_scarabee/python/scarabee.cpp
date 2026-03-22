@@ -40,7 +40,9 @@ extern void init_Cartesian2D(py::module&);
 extern void init_CMFD(py::module&);
 extern void init_MOCDriver(py::module&);
 extern void init_CriticalitySpectrum(py::module&);
+extern void init_LeakageCorrections(py::module&);
 extern void init_DiffusionData(py::module&);
+extern void init_FormFactors(py::module&);
 extern void init_DiffusionGeometry(py::module&);
 extern void init_FDDiffusionDriver(py::module&);
 extern void init_NEMDiffusionDriver(py::module&);
@@ -84,7 +86,9 @@ PYBIND11_MODULE(_scarabee, m, py::mod_gil_not_used()) {
   init_CMFD(m);
   init_MOCDriver(m);
   init_CriticalitySpectrum(m);
+  init_LeakageCorrections(m);
   init_DiffusionData(m);
+  init_FormFactors(m);
   init_DiffusionGeometry(m);
   init_FDDiffusionDriver(m);
   init_NEMDiffusionDriver(m);
@@ -93,8 +97,9 @@ PYBIND11_MODULE(_scarabee, m, py::mod_gil_not_used()) {
   init_DepletionMatrix(m);
 
   m.attr("__author__") = "Hunter Belanger";
-  m.attr("__copyright__") = "Copyright 2024-2025, Hunter Belanger";
-  m.attr("__license__") = "GPL-3.0-or-later";
+  m.attr("__copyright__") =
+      "Copyright 2024-2026, Hunter Belanger and contributors";
+  m.attr("__license__") = "LGPL-3.0-or-later";
   m.attr("__maintainer__") = "Hunter Belanger";
   m.attr("__email__") = "hunter.belanger@gmail.com";
   m.attr("__version__") = scarabee::VERSION_STRING;

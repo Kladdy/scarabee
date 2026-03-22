@@ -5,14 +5,17 @@ from .._scarabee import (
     DiffusionCrossSection,
     DiffusionData,
     ReflectorSN,
+    DiffusionGeometry,
+    NEMDiffusionDriver,
+    FormFactors,
     set_logging_level,
     scarabee_log,
     LogLevel,
 )
 from .nodal_flux import NodalFlux1D
-
 import numpy as np
-#import matplotlib.pyplot as plt
+
+# import matplotlib.pyplot as plt
 
 
 class Reflector:
@@ -104,22 +107,47 @@ class Reflector:
         self.diffusion_xs = None
         self.diffusion_data = None
 
-        # No Dancoff correction, as looking at 1D isolated slab for baffle
-        Ee = 1.0 / (2.0 * self.baffle_width)
-        self.baffle = baffle.roman_xs(0.0, Ee, ndl)
-        self.baffle.name = "Baffle"
+        if self.baffle_width > 0.0:
+            # No Dancoff correction, as looking at 1D isolated slab for baffle
+            Ee = 1.0 / (2.0 * self.baffle_width)
+            self.baffle = baffle.roman_xs(0.0, Ee, ndl)
+            self.baffle.name = "Baffle"
+        else:
+            self.baffle = None
 
-        self.keff_tolerance = 1.0e-5
-        self.flux_tolerance = 1.0e-5
+        self.keff_tolerance = 1.0e-6
+        self.flux_tolerance = 1.0e-6
 
-        if self.gap_width + self.baffle_width >= self.assembly_width:
+        if self.gap_width + self.baffle_width > self.assembly_width:
             raise RuntimeError(
                 "The assembly width is smaller than the sum of the gap and baffle widths."
             )
 
+    def _doctor_xs(self, xs: DiffusionCrossSection) -> DiffusionCrossSection:
+        # First, get raw arrays from the cross section
+        NG = xs.ngroups
+        D = np.zeros(NG)
+        Ea = np.zeros(NG)
+        Ef = np.zeros(NG)
+        vEf = np.zeros(NG)
+        chi = np.zeros(NG)
+        Es = np.zeros((NG, NG))
+        for g in range(NG):
+            D[g] = xs.D(g)
+            Ea[g] = xs.Ea(g)
+            Ef[g] = xs.Ef(g)
+            vEf[g] = xs.vEf(g)
+            chi[g] = xs.chi(g)
+            for gg in range(NG):
+                Es[g, gg] = xs.Es(g, gg)
+
+        D *= 1.01
+
+        return DiffusionCrossSection(D, Ea, Es, Ef, vEf, chi)
+
     def solve(self) -> None:
         """
-        Runs a 1D annular problem to generate few group cross sections for the
+        Runs a 1D problem to generate few group cross sections for the
         reflector, with the core baffle.
         """
         scarabee_log(LogLevel.Info, "Starting reflector calculation.")
@@ -133,56 +161,52 @@ class Reflector:
         dx = []
         mats = []
 
-        # We add 2 fuel assemblies worth of homogenized core
-        NF = 2 * 10 * 17
-        dr = 2.0 * self.assembly_width / (float(NF))
+        # We add 1 fuel assembly worth of homogenized core
+        NF = 15 * 17
+        dr = self.assembly_width / float(NF)
         dx += [dr] * NF
         mats += [self.fuel] * NF
 
-        # We now add one ring for the gap
-        NG = 3
-        dr = self.gap_width / (float(NG))
-        dx += [dr] * NG
-        mats += [self.moderator] * NG
+        # We now add the gap (if present)
+        if self.gap_width == 0.0:
+            NG = 0
+        else:
+            NG = int(self.gap_width / 0.1) + 1
+            if NG < 5:
+                NG = 5
+            dr = self.gap_width / float(NG)
+            dx += [dr] * NG
+            mats += [self.moderator] * NG
 
-        # Now we add 20 regions for the baffle
-        NB = 20
-        dr = self.baffle_width / float(NB)
-        dx += [dr] * NB
-        mats += [self.baffle] * NB
+        # Now we add regions for the baffle
+        if self.baffle_width == 0.0:
+            NB = 0
+        else:
+            NB = int(self.baffle_width / 0.1) + 1
+            dr = self.baffle_width / float(NB)
+            dx += [dr] * NB
+            mats += [self.baffle] * NB
 
         # Now we add the outer water reflector regions
         ref_width = self.assembly_width - self.gap_width - self.baffle_width
-        NR = int(ref_width / 0.02) + 1
-        dr = ref_width / float(NR)
-        dx += [dr] * NR
-        mats += [self.moderator] * NR
+        if ref_width <= 0.0:
+            # Case of a heavy reflector
+            NR = 0
+        else:
+            NR = int(ref_width / 0.1) + 1
+            dr = ref_width / float(NR)
+            dx += [dr] * NR
+            mats += [self.moderator] * NR
 
+        # Setup the Sn solver and run
         ref_sn = ReflectorSN(mats, dx, self.nangles, self.anisotropic)
         set_logging_level(LogLevel.Warning)
         ref_sn.solve()
         set_logging_level(LogLevel.Info)
         scarabee_log(LogLevel.Info, "")
-        scarabee_log(LogLevel.Info, "Kinf: {:.5f}".format(ref_sn.keff))
-        scarabee_log(LogLevel.Info, "")
-        scarabee_log(LogLevel.Info, "Generating diffusion data.")
+        scarabee_log(LogLevel.Info, "SN  Keff: {:.5f}".format(ref_sn.keff))
 
-        few_group_flux = np.zeros((len(self.condensation_scheme), NF + NG + NB + NR))
-        for i in range(NF + 1 + NB + NR):
-            for G in range(len(self.condensation_scheme)):
-                g_min = self.condensation_scheme[G][0]
-                g_max = self.condensation_scheme[G][1]
-                for g in range(g_min, g_max + 1):
-                    few_group_flux[G, i] += ref_sn.flux(i, g)
-        dx = np.array(dx)
-        x = np.zeros(len(dx))
-        for i in range(len(dx)):
-            if i == 0:
-                x[0] = 0.5 * dx[0]
-            else:
-                x[i] = x[i - 1] + 0.5 * (dx[i - 1] + dx[i])
-
-        # Here we compute the cross sections
+        # Here we compute the homogenized and condensed cross sections
         ref_homog_xs = ref_sn.homogenize(list(range(NF, NF + NG + NB + NR)))
         ref_homog_spec = ref_sn.homogenize_flux_spectrum(
             list(range(NF, NF + NG + NB + NR))
@@ -199,6 +223,24 @@ class Reflector:
             self.condensation_scheme, fuel_homog_spec
         )
 
+        # Condense the few-group flux along entire 1D geometry
+        few_group_flux = np.zeros((len(self.condensation_scheme), NF + NG + NB + NR))
+        for i in range(NF + NG + NB + NR):
+            for G in range(len(self.condensation_scheme)):
+                g_min = self.condensation_scheme[G][0]
+                g_max = self.condensation_scheme[G][1]
+                for g in range(g_min, g_max + 1):
+                    few_group_flux[G, i] += ref_sn.flux(i, g)
+        dx = np.array(dx)
+
+        # Make an array with the mid-point x-values of each bin from Sn simulation
+        x = np.zeros(len(dx))
+        for i in range(len(dx)):
+            if i == 0:
+                x[0] = 0.5 * dx[0]
+            else:
+                x[i] = x[i - 1] + 0.5 * (dx[i - 1] + dx[i])
+
         # Obtain net currents at node boundaries and average flux
         avg_flx_ref = np.zeros(len(self.condensation_scheme))
         avg_flx_fuel = np.zeros(len(self.condensation_scheme))
@@ -207,9 +249,11 @@ class Reflector:
         j_max = np.zeros(len(self.condensation_scheme))
         s_mid = NF
         s_max = ref_sn.nsurfaces - 1
+        len_fuel = np.sum(dx[:NF])
+        len_ref = np.sum(dx[NF:])
         for g in range(len(self.condensation_scheme)):
-            avg_flx_fuel[g] = np.mean(few_group_flux[g, :NF])
-            avg_flx_ref[g] = np.mean(few_group_flux[g, NF:])
+            avg_flx_fuel[g] = np.sum(few_group_flux[g, :NF] * dx[:NF]) / len_fuel
+            avg_flx_ref[g] = np.sum(few_group_flux[g, NF:] * dx[NF:]) / len_ref
 
             g_min = self.condensation_scheme[g][0]
             g_max = self.condensation_scheme[g][1]
@@ -225,39 +269,112 @@ class Reflector:
         fuel_node = NodalFlux1D(
             0.0, x_fuel, ref_sn.keff, fuel_diffusion_xs, avg_flx_fuel, j_0, j_mid
         )
+
         ref_node = NodalFlux1D(
             x_fuel, x_ref_end, ref_sn.keff, self.diffusion_xs, avg_flx_ref, j_mid, j_max
         )
 
-        # Plot reference Sn flux and nodal flux
-        # for g in range(len(self.condensation_scheme)):
-        #    nodal_flux = np.zeros(len(x))
-        #    nodal_flux[:NF] = fuel_node(x[:NF], g)
-        #    nodal_flux[NF:] = ref_node(x[NF:], g)
-        #    plt.plot(x, few_group_flux[g, :], label="Sn")
-        #    plt.plot(x, nodal_flux, label="Nodal")
-        #    plt.xlabel("x [cm]")
-        #    plt.ylabel("Flux [Arb. Units]")
-        #    plt.title("Group {:}".format(g))
-        #    plt.show()
+        # I noticed that the initial fixed-source claculation from above can result in
+        # a negative flux next to the vacuum BC, which is of course non-physical. Here,
+        # we iteratively bump up the diffusion coefficients until the fluxes are
+        # positive at the far right boundary in all groups.
+        xmax_homog_fluxes = ref_node.pos_surf_flux()
+        while np.min(xmax_homog_fluxes) < 0.0:
+            self.diffusion_xs = self._doctor_xs(self.diffusion_xs)
+            ref_node = NodalFlux1D(
+                x_fuel,
+                x_ref_end,
+                ref_sn.keff,
+                self.diffusion_xs,
+                avg_flx_ref,
+                j_mid,
+                j_max,
+            )
+            xmax_homog_fluxes = ref_node.pos_surf_flux()
 
-        # Compute the ADFs
-        self.adf = np.zeros((len(self.condensation_scheme), 6))
-        for G in range(len(self.condensation_scheme)):
-            heter_flx_fuel = few_group_flux[G, NF - 1]
-            homog_flx_fuel = fuel_node.pos_surf_flux(G)
+        # Compute DFs
+        heter_flx = 0.5 * (few_group_flux[:, NF - 1] + few_group_flux[:, NF])
+        homog_flx_fuel = fuel_node.pos_surf_flux()
+        homog_flx_ref = ref_node.neg_surf_flux()
 
-            heter_flx_ref = few_group_flux[G, NF]
-            homog_flx_ref = ref_node.neg_surf_flux(G)
+        # Get DF for fuel and reflector sides
+        f_fuel = heter_flx / homog_flx_fuel
+        f_ref = heter_flx / homog_flx_ref
 
-            f_fuel = heter_flx_fuel / homog_flx_fuel
-            f_ref = heter_flx_ref / homog_flx_ref
+        # As outlined by Smith in [1], we should normalize the reflector DFs by
+        # The fuel DFs from the reflector calculation. Then, in the nodal
+        # calculation, we can multiply by the DF of the actual fuel next to the
+        # node to get better results.
+        f_ref /= f_fuel
+        f_fuel /= f_fuel
 
-            # Normalize to fuel DF
-            f_ref = f_ref / f_fuel
-
-            self.adf[G, :] = f_ref
+        nodal_flux = np.zeros((len(self.condensation_scheme), len(x)))
+        self.adf = np.ones((len(self.condensation_scheme), 6))
+        fuel_adf = np.ones((len(self.condensation_scheme), 6))
+        for g in range(len(self.condensation_scheme)):
+            nodal_flux[g, :NF] = fuel_node(x[:NF], g)
+            nodal_flux[g, NF:] = ref_node(x[NF:], g)
+            self.adf[g, :] = f_ref[g]
+            fuel_adf[g, :] = f_fuel[g]
 
         # Create the diffusion data
         self.diffusion_data = DiffusionData(self.diffusion_xs)
         self.diffusion_data.adf = self.adf
+        self.diffusion_data.reflector = True
+        self.form_factors = FormFactors(
+            np.array([[0.0]]),
+            np.array([self.assembly_width]),
+            np.array([self.assembly_width]),
+        )
+
+        # Do a nodal k-eff calulation
+        fuel_diffision_data = DiffusionData(fuel_diffusion_xs)
+        fuel_diffision_data.adf = fuel_adf
+
+        dx = np.array([1 * self.assembly_width, self.assembly_width])
+        nx = np.array([1, 1])
+        dy = np.array([10.0])
+        ny = np.array([1])
+
+        nem_geom = DiffusionGeometry(
+            [fuel_diffision_data, self.diffusion_data],
+            dx,
+            nx,
+            dy,
+            ny,
+            dy,
+            ny,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+        )
+        nem_solver = NEMDiffusionDriver(nem_geom)
+        nem_solver.flux_tolerance = 1.0e-6
+        set_logging_level(LogLevel.Warning)
+        nem_solver.solve()
+        set_logging_level(LogLevel.Info)
+        scarabee_log(LogLevel.Info, "NEM Keff: {:.5f}".format(nem_solver.keff))
+
+        nem_keff_flux = nem_solver.flux(x, [10.0], [10.0])
+        flux_norm = np.sum(few_group_flux[:, :NF])
+        nem_keff_flux *= flux_norm / np.sum(nem_keff_flux[:, :NF])
+
+        # Plot flux for each group
+        # for g in range(len(self.condensation_scheme)):
+        #    plt.plot(x, few_group_flux[g, :], label="Sn")
+        #    plt.plot(x, nodal_flux[g, :], label="NEM Fixed-Source")
+        #    plt.plot(x, nem_keff_flux[g, :, 0, 0], label="NEM keff")
+        #    plt.xlabel("x [cm]")
+        #    plt.ylabel("Flux [Arb. Units]")
+        #    plt.title("Group {:}".format(g))
+        #    plt.legend().set_draggable(True)
+        #    plt.tight_layout()
+        #    plt.show()
+
+
+# [1] K. S. Smith, “Nodal diffusion methods and lattice physics data in LWR
+#     analyses: Understanding numerous subtle details,” Prog Nucl Energ,
+#     vol. 101, pp. 360–369, 2017, doi: 10.1016/j.pnucene.2017.06.013.

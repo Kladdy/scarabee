@@ -15,10 +15,10 @@
 
 #include <xtensor/containers/xtensor.hpp>
 
-#include <array>
 #include <cmath>
 #include <memory>
-#include <tuple>
+#include <optional>
+#include <utility>
 
 namespace scarabee {
 
@@ -51,6 +51,9 @@ class NEMDiffusionDriver {
   double flux_tolerance() const { return flux_tol_; }
   void set_flux_tolerance(double ftol);
 
+  bool leakage_corrections() const { return leakage_corrections_; }
+  void set_leakage_corrections(bool lc) { leakage_corrections_ = lc; }
+
   double keff() const { return keff_; }
 
   double flux(double x, double y, double z, std::size_t g) const;
@@ -63,9 +66,6 @@ class NEMDiffusionDriver {
   xt::xtensor<double, 3> power(const xt::xtensor<double, 1>& x,
                                const xt::xtensor<double, 1>& y,
                                const xt::xtensor<double, 1>& z) const;
-  std::tuple<xt::xtensor<double, 3>, xt::xtensor<double, 1>,
-             xt::xtensor<double, 1>>
-  pin_power(const xt::xtensor<double, 1>& z) const;
   xt::xtensor<double, 3> avg_power() const;
 
   void save(const std::string& fname);
@@ -96,6 +96,8 @@ class NEMDiffusionDriver {
     Z2 = 6
   };
 
+  using Neighbor = DiffusionGeometry::Neighbor;
+
   using RMat = Eigen::Matrix<double, 6, 6>;
   using PMat = Eigen::Matrix<double, 6, 7>;
 
@@ -123,16 +125,24 @@ class NEMDiffusionDriver {
   xt::xtensor<NeighborInfo, 2> neighbors_;
 
   xt::xtensor<xt::svector<std::size_t>, 1> geom_inds_;
-  std::vector<std::shared_ptr<DiffusionCrossSection>> mats_;
+  std::vector<std::shared_ptr<DiffusionCrossSection>>
+      mats_;  // These cross sections get modified in solve !
+  std::vector<std::shared_ptr<DiffusionData>> diff_datas_;
   xt::xtensor<double, 3> adf_;  // m, group, side
 
   double keff_ = 1.;
+  double kshift_ = 1.;
   double flux_tol_ = 1.E-5;
   double keff_tol_ = 1.E-5;
+  bool leakage_corrections_{false};
   bool solved_{false};
 
   //----------------------------------------------------------------------------
   // PRIVATE METHODS
+  void fill_node_coupling_matrices(std::size_t g, std::size_t m,
+                                   const DiffusionCrossSection& xs,
+                                   const double del_x, const double del_y,
+                                   const double del_z);
   void fill_coupling_matrices();
   void fill_mats_adf();
   void fill_source();
@@ -146,6 +156,10 @@ class NEMDiffusionDriver {
   void calc_node(const std::size_t g, const std::size_t m, const double invs_dx,
                  const double invs_dy, const double invs_dz,
                  const DiffusionCrossSection& xs);
+  double calc_avg_node_DB2(const std::size_t g, const std::size_t m,
+                           const double dx, const double dy,
+                           const double dz) const;
+  void update_node_xs_and_matrices();
   void inner_iteration();
 
   inline double calc_net_current(const Current& Jin, const Current& Jout,

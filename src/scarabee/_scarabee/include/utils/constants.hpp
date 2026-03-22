@@ -2,7 +2,6 @@
 #define SCARABEE_CONSTANTS_H
 
 #include <array>
-#include <cmath>
 #include <limits>
 #include <map>
 #include <string>

@@ -1,0 +1,137 @@
+============================
+Scarabée 0.1.1 Release Notes
+============================
+
+-----------
+New License
+-----------
+
+The very first release of Scarabée was under the GPLv3 license. It was realized that
+this could potentially pose problems down the road if integration with other open-source
+nuclear engineering tools was desired. Additionally, it meant all Python scripts using
+Scarabée written by others would also need to be GPLv3 licensed if distributed, which
+was not the initial intent. As such, all contributors to Scarabée up until this release
+have agreed to re-license Scarabée under the LGPLv3 `(see #20)
+<https://github.com/scarabee-dev/scarabee/pull/20>`_. This means that Scarabée can be
+more easily included as a dependency in other open-source projects with a permissive
+license, and Python scripts which simply use Scarabée can be under whatever license the
+author desires.
+
+---------------------
+Important API Changes
+---------------------
+
+- The moderator parameters (boron concentration, temperature, and pressure) are now
+  specified on a PWRAssembly using a dictionary, instead of each trait having its own
+  parameter in the constructor.
+- DiffusionData no longer contains any form factors. These are now stored in their own
+  dedicated class, FormFactors. You will not be able to de-serialize previously stored
+  DiffusionData instances with this new version, and you will need to re-run assembly
+  problems to re-generate nodal data.
+- The NEMDiffusionDriver can no longer perform pin power reconstruction. There is a new
+  CoreFormFactors and CoreBuilder class which can accomplish this task (see below).
+
+------------
+New Features
+------------
+
+- The logger now uses colors in the terminal.
+- Information about the nuclear data library is now written to the log, so that you know
+  what library was used in a simulation.
+- New Scarabée-155 group structure for better performance with MOX fuel.
+- Can now build nuclear data libraries with the SCALE-56 group structure.
+- The MOCDriver now performs tests on the angular quadrature to check for particle
+  conservation. These tests are only performed when using anisotropic scattering, as
+  that is the only case when the quadrature choice can lead to particle conservation
+  troubles. If the quadrature does not ensure particle conservation, warnings are
+  written to the log. This could indicate that CMFD might have convergence problems.
+- The MOCDriver now performs tests to ensure that all flat source regions are crossed by
+  at least one track for each azimuthal angle. If this is not the case, a warning will
+  be written to the log.
+- There is now a method on the Material class to compute the cross sections
+  corresponding to an infinite homogeneous medium.
+- There is a new critical spectrum solver called FundamentalModeCriticalSpectrum. This
+  solver does not compute the current or diffusion coefficients. Instead, it uses the
+  provided transport cross sections to compute the required buckling. This method aligns
+  with the approach provided in section 1.7 of the Lattice Physics Computations chapter
+  by Knott and Yamamoto from the Handbook.
+- DiffusionData instances how have a reflector indication flag. If True, the
+  discontinuity factor on the reflector side will be multiplied by the corresponding
+  discontinuity factor on the fuel side. This is implemented in the DiffusionGeometry,
+  so it works with both the FDDiffusionDriver and the NEMDiffusionDriver, and helps
+  improve reflector performance in the full core model.
+- A new LeakageCorrections class now exists, which can be optionally added to a
+  DiffusionData. It contains the linear coefficients to update few-group diffusion cross
+  sections based on the in-situ leakage-to-removal ratio.
+- The NEMDiffusionDriver can now update the nodal cross sections every 50 iterations,
+  using the LeakageCorrections data (if present) and the node averaged buckling. This
+  requires that the DiffusionData has few-group cross sections which were not generated
+  with the leakage model (see new PWRAssembly option below). To enable this feature,
+  the NEMDiffusionDriver now has a leakage_corrections flag which can be set to True.
+- The PWRAssembly class now has a leakage_corrections flag, which if True, will generate
+  DiffusionData few-group cross sections without the leakage model, but will contain a
+  LeakageCorrections instance to update the few-group cross sections in the nodal solver.
+  If False (default value), the few-group cross sections will have the leakage model
+  applied.
+- You can now either specify the parameters for the moderator in a PWRAssembly, or you
+  can directly provide a Material instance. This is highly useful, as some benchmarks
+  specifically provide atom concentrations, which likely will not be in agreement with
+  the borated_water function which is used otherwise.
+- It is now possible to reflect DiffusionData across either the x or y axis, which now
+  makes it fully possible to generate unique nodal data for each quadrant of an assembly.
+  This is needed when modeling asymmetric burnable poison configurations.
+- There is a new FormFactors class which represents the form factors for an entire
+  assembly. Like DiffusionData, they can be rotated or reflected.
+- While there was previously the option to generate independent quadrant nodal data from
+  the PWRAssembly class, it wasn't usable in practice because you couldn't correctly
+  reorient a quadrant without reflections. This problem is not resolved with the new
+  reflection methods on DiffusionData and FormFactors.
+- A new CoreFormFactors class facilitates pin power reconstruction, and is more versatile
+  than the previous add-hoc solution which was located in the NEMDiffusionDriver, and has
+  been removed.
+- A new CoreBuilder class facilitates building a full core nodal modal, along with the
+  corresponding CoreFormFactors. It can also carry our pin power reconstruction and 
+  compute assembly powers. It uses SimpleTile and QuadrantsTile to describe the full core
+  geometry, both inheriting from CoreTile. This makes it easier to describe cores where
+  some assemblies might be asymmetric with unique quadrants.
+- The track generation in the MOCDriver, as well as geometry plotting, is now
+  substantially faster thanks to a new cell search algorithm.
+
+---------
+Bug Fixes
+---------
+
+- Documentation for various depletion components was missing from the previous release.
+- The average fuel nuclide density across an assembly in the PWRAssembly class was being
+  calculated incorrectly.
+- Improves convergence and stability of CMFD acceleration `#17
+  <https://github.com/scarabee-dev/scarabee/pull/17>`_.
+- The B1 and P1 critical spectrum methods did not correctly consider the case where a
+  desired buckling was provided. In particular, it did not allow negative bucklings, and
+  would square the user provided input.
+- The critical leakage model was not being used to generate few-group diffusion cross
+  sections. This was leading to very inaccurate full core diffusion results.
+- The average flux was not being computed correctly in the reflector region of the
+  Reflector class, causing strong in/out power tilts in the full core models.
+- It was previously possible to have a negative homogeneous flux on the vacuum boundary
+  of the reflector region in the Reflector class, which is nonphysical. To avoid this
+  problem, the diffusion coefficients are iteratively increased by a small fraction
+  until the scalar flux is positive at the vacuum boundary. The resulting diffusion
+  coefficients are used for the reflector, and the resulting homogeneous flux is used to
+  compute the discontinuity factors.
+- The B1 critical spectrum method was not correctly implemented, and generated erroneous
+  values for the diffusion coefficients and flux spectrum.
+- The P1 and B1 critical spectrum methods could not compute the diffusion coefficients
+  when the buckling was zero.
+- The rotate_counterclockwise method on DiffusionData was not correctly implemented.
+- Periodic boundary conditions were not being treated correctly in CMFD.
+- The function for determining a nuclide ZAm number from a name string did not work
+  correctly for names with a TSL identifier that contained a number (i.e. H1_H2O).
+
+------------
+Contributors
+------------
+
+- `Hunter Belanger <https://github.com/HunterBelanger>`_
+- `Parth Singh <https://github.com/2018uch0002>`_
+- `Jason Gaiardelli <https://github.com/gaiarj>`_

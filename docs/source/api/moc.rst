@@ -17,6 +17,8 @@ Method of Characteristics
 
 .. autoclass:: scarabee.B1CriticalitySpectrum
 
+.. autoclass:: scarabee.FundamentalModeCriticalitySpectrum
+
 Polar Quadratures
 -----------------
 

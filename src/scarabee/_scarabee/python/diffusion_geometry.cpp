@@ -167,7 +167,7 @@ void init_DiffusionGeometry(py::module& m) {
            "Returns\n"
            "-------\n"
            "DiffusionData\n"
-           "    Cross section data, form factors, and ADFs for material m.\n",
+           "    Cross section data and ADFs for material m.\n",
            py::arg("m"))
 
       .def("volume", &DiffusionGeometry::volume,

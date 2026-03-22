@@ -1,14 +1,16 @@
-from scarabee.reseau.burnable_poison_rod import BurnablePoisonRod
+from .burnable_poison_rod import BurnablePoisonRod
 from .fuel_pin import FuelPin
 from .guide_tube import GuideTube
 from .critical_leakage import CriticalLeakage
+from .symmetry import Symmetry
+from .. import PolarQuadrature
 from ._ensleeve import (
     _ensleeve_quarter,
     _ensleeve_half_top,
     _ensleeve_half_right,
     _ensleeve_full,
 )
-from .nodal_flux import NodalFlux1D, NodalFlux2D
+from .equivalence_theory import compute_adf_cdf_from_cmfd, compute_adf_cdf_from_moc
 from .._scarabee import (
     borated_water,
     Material,
@@ -27,41 +29,22 @@ from .._scarabee import (
     YamamotoTabuchi6,
     P1CriticalitySpectrum,
     B1CriticalitySpectrum,
+    FundamentalModeCriticalitySpectrum,
     ADF,
     CDF,
     DiffusionCrossSection,
     DiffusionData,
+    FormFactors,
+    LeakageCorrections,
     set_logging_level,
     scarabee_log,
     LogLevel,
 )
-from enum import Enum
-import numpy as np
 from typing import Optional, List, Tuple, Union
 import copy
 from threading import Thread
-from .. import PolarQuadrature
-
-
-class Symmetry(Enum):
-    """
-    Defines the symmetry to use when simulating a PWR fuel assembly.
-    """
-
-    Full = 1
-    """
-    The fuel assembly has no symmetry.
-    """
-
-    Half = 2
-    """
-    The fuel assembly has symmetry about either the x or y axis (but not both).
-    """
-
-    Quarter = 3
-    """
-    The fuel assembly has symmetry about the x and y axis.
-    """
+import numpy as np
+from scipy.optimize import curve_fit
 
 
 class PWRAssembly:
@@ -81,17 +64,26 @@ class PWRAssembly:
     cells : list of list of FuelPin or GuideTube
         All of the cells which describe the assembly geometry. Should be
         consistent with the symmetry argument.
-    boron_ppm : float
-        Moderator boron concentration in parts per million. Default is 800.
-    moderator_temp : float
-        Moderator temperature in Kelvin. Default is 570.
-    moderator_pressure : float
-        Moderator pressure in MPa. Default is 15.5.
-    moderator_legendre_order : int
-        Maximum Legendre order to load for the moderator's anisotropic
-        scattering data. Default is 1.
+    moderator : dict
+        Parameters for defining the moderator. The boron concentration,
+        temperature, and pressure will be used to call
+        :py:func:`scarabee.borated_water`. Alternatively, the `material` key
+        can be used to provide a user specified moderator material. Default is
+        an empty dictionary (all default values). Acceptable keys are:
+
+        :boron-ppm: Moderator boron concentration in parts per million. Default
+            is 800 if not provided. (float)
+        :temperature: Moderator temperature in Kelvin. Default is 570 if not
+            provided. (float)
+        :pressure: Moderator pressure in MPa. Default is 15.5 if not provided.
+            (float)
+        :legendre-order: Maximum Legendre order to load for the moderator's
+            anisotropic scattering data. Default is 1 if not provided. (int)
+        :material: User defined material which will be used directly. The
+            scarabee.borated_water function will not be called.
+            (scarabee.Material)
     symmetry : Symmetry
-        Symmetry of the fuel assembly. Default is Symmetry.Full.
+        Symmetry of the fuel assembly. Default is Symmetry.Quarter.
     independent_quadrant : bool
         If symmetry is Symmetry.Quarter and this attribute is true, the quarter
         assembly is treated as an independent assembly, with ADFs generated for
@@ -171,7 +163,7 @@ class PWRAssembly:
         in range (0., 1.E-2). Default value is 1.E-5.
     moc_track_spacing : float
         Spacing between tracks in the assembly MOC calculations. Default value
-        is 0.04 cm.
+        is 0.03 cm.
     moc_num_angles : int
         Number of azimuthal angles in the assembly MOC calculations. Default
         value is 32.
@@ -208,6 +200,14 @@ class PWRAssembly:
         even if CMFD is being used. ADFs and CDFs that are generated in this
         manner are typically less accurate than those generated with the CMFD
         results. Default value is False.
+    leakage_corrections : bool
+        If True, the diffusion data contains few-group diffusion cross sections
+        which DO NOT have the critical leakage model applied. Instead, a
+        LeakageCorrections is created to update the few-group diffusion cross
+        sections based on the in-situ leakage from the nodal diffusion solver.
+        If False, the diffusion data does not have a LeakageCorrections instance
+        and the few-group cross sections DO have the critical leakage model
+        applied. Default is False.
     leakage_model : CriticalLeakage
         Model used to determine the critical leakage flux spectrum, also known
         as the fundamental mode. Default method is homogeneous P1.
@@ -252,11 +252,8 @@ class PWRAssembly:
         pitch: float,
         ndl: NDLibrary,
         cells: List[List[Union[FuelPin, GuideTube]]],
-        boron_ppm: float = 800.0,
-        moderator_temp: float = 570.0,
-        moderator_pressure: float = 15.5,
-        moderator_legendre_order: int = 1,
-        symmetry: Symmetry = Symmetry.Full,
+        moderator: dict = {},
+        symmetry: Symmetry = Symmetry.Quarter,
         independent_quadrant: bool = False,
         linear_power: float = 42.0,
         assembly_pitch: Optional[float] = None,
@@ -316,7 +313,7 @@ class PWRAssembly:
 
             if assembly_pitch <= 0.0:
                 raise RuntimeError("Assembly pitch must be > 0.")
-            elif assembly_pitch <= self._assembly_pitch:
+            elif assembly_pitch < self._assembly_pitch:
                 raise RuntimeError(
                     "Provided assembly pitch is smaller than that indicated by the pitch and shape."
                 )
@@ -368,33 +365,50 @@ class PWRAssembly:
         self._moderator_volume_fraction: float = 0.0
         self._compute_moderator_volume_fraction()
 
-        # Get moderator parameters
-        if boron_ppm < 0.0:
-            raise ValueError("Boron concentration must be >= 0.")
-        self._boron_ppm = boron_ppm
-
-        if moderator_temp <= 0.0:
-            raise ValueError("Moderator temperature must be > 0.")
-        self._moderator_temp = moderator_temp
-
-        if moderator_pressure <= 0.0:
-            raise ValueError("Moderator pressure must be > 0.")
-        self._moderator_pressure = moderator_pressure
-
-        if moderator_legendre_order < 1:
-            raise ValueError("Moderator Legendre order must be >= 1.")
-        self._moderator_legendre_order = moderator_legendre_order
+        # Get moderator parameters from the dictionary.
+        self._boron_ppm = 800.0
+        self._moderator_temp = 570.0
+        self._moderator_pressure = 15.5
+        self._moderator_legendre_order = 1
+        for key in moderator:
+            if key == "boron-ppm":
+                self._boron_ppm = float(moderator[key])
+                if self._boron_ppm < 0.0:
+                    raise ValueError("Boron concentration must be >= 0.")
+            elif key == "temperature":
+                self._moderator_temp = float(moderator[key])
+                if self._moderator_temp <= 0.0:
+                    raise ValueError("Moderator temperature must be > 0.")
+            elif key == "pressure":
+                self._moderator_pressure = float(moderator[key])
+                if self._moderator_pressure <= 0.0:
+                    raise ValueError("Moderator pressure must be > 0.")
+            elif key == "legendre-order":
+                self._moderator_legendre_order = int(moderator[key])
+                if self._moderator_legendre_order < 1:
+                    raise ValueError("Moderator Legendre order must be >= 1.")
+            elif key == "material":
+                if isinstance(moderator[key], Material) == False:
+                    raise TypeError(
+                        "Provided moderator is not a scarabee.Material instance."
+                    )
+                self._moderator = moderator[key]
+            else:
+                raise KeyError(f'Unknown key "{key}" provided in moderator dictionary.')
+        # If the moderator material wasn't directly provided, we make it from the info
+        try:
+            self._moderator
+        except AttributeError:
+            # Make material for borated water
+            self._moderator: Material = borated_water(
+                self.boron_ppm, self.moderator_temp, self.moderator_pressure, self._ndl
+            )
+            self._moderator.name = f"Moderator ({self.boron_ppm} ppm boron)"
+            self._moderator.max_legendre_order = self._moderator_legendre_order
 
         if linear_power <= 0.0:
             raise ValueError("Linear power must be > 0.")
         self._linear_power = linear_power
-
-        # Make material for borated water
-        self._moderator: Material = borated_water(
-            self.boron_ppm, self.moderator_temp, self.moderator_pressure, self._ndl
-        )
-        self._moderator.name = f"Moderator ({self.boron_ppm} ppm boron)"
-        self._moderator.max_legendre_order = self._moderator_legendre_order
 
         # Set initial boundary conditions
         self._x_min_bc = BoundaryCondition.Periodic
@@ -483,10 +497,10 @@ class PWRAssembly:
                 self.grid_sleeve.size * [1.0e10], self._ndl
             )
 
-        self._moc_track_spacing: float = 0.04
+        self._moc_track_spacing: float = 0.03
         self._moc_num_angles: int = 64
         # Default polar quadrature chosen later based on _anisotropic
-        self._moc_polar_quadrature: Optional[PolarQuadrature] = None 
+        self._moc_polar_quadrature: Optional[PolarQuadrature] = None
         self._flux_tolerance: float = 1.0e-5
         self._keff_tolerance: float = 1.0e-5
         self._anisotropic: bool = False
@@ -497,6 +511,7 @@ class PWRAssembly:
         self._asmbly_geom: Optional[Cartesian2D] = None
         self._asmbly_moc: Optional[MOCDriver] = None
 
+        self._leakage_corrections: bool = False
         self._leakage_model: CriticalLeakage = CriticalLeakage.P1
         self._infinite_flux_spectrum = (
             None  # To reset to infinite spectrum in MOC driver
@@ -533,6 +548,7 @@ class PWRAssembly:
         # is performed, a DiffusionData instance will be generated for each
         # burn-up step.
         self._diffusion_data: Optional[Union[DiffusionData, List[DiffusionData]]] = None
+        self._form_factors: Optional[Union[FormFactors, List[FormFactors]]] = None
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -737,6 +753,14 @@ class PWRAssembly:
     @property
     def cells(self) -> List[List[Union[FuelPin, GuideTube]]]:
         return self._cells
+
+    @property
+    def leakage_corrections(self) -> bool:
+        return self._leakage_corrections
+
+    @leakage_corrections.setter
+    def leakage_corrections(self, lc: bool) -> None:
+        self._leakage_corrections = lc
 
     @property
     def leakage_model(self) -> CriticalLeakage:
@@ -949,6 +973,10 @@ class PWRAssembly:
     @property
     def diffusion_data(self) -> Optional[Union[DiffusionData, List[DiffusionData]]]:
         return self._diffusion_data
+
+    @property
+    def form_factors(self) -> Optional[Union[FormFactors, List[FormFactors]]]:
+        return self._form_factors
 
     def _set_cells(self, cells: List[List[Union[FuelPin, GuideTube]]]) -> None:
         if len(cells) != self._simulated_shape[1]:
@@ -1956,44 +1984,67 @@ class PWRAssembly:
                 if isinstance(cell, GuideTube):
                     cell.set_fill_xs_for_depletion_step(-1, self._ndl)
 
-    def apply_leakage_model(self) -> None:
+    def apply_leakage_model(self, scilent: bool = False) -> None:
         """
         Applied the critical leakage model to the assembly, modifying the flux
         in the MOC simulation directly.
+
+        Parameters
+        ----------
+        scilent : bool
+            If True, nothing is written to the log. If False, the type of
+            spectrum calculation, as well as kinf and the buckling are logged.
+            Default value is False.
         """
         # If no leakage, just return
         if self.leakage_model == CriticalLeakage.NoLeakage:
             return
 
-        scarabee_log(LogLevel.Info, "")
+        if not scilent:
+            scarabee_log(LogLevel.Info, "")
 
         self._infinite_flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
 
         homogenized_moc = self._asmbly_moc.homogenize()
 
         if self.leakage_model == CriticalLeakage.P1:
-            scarabee_log(
-                LogLevel.Info, "Performing P1 criticality spectrum calculation"
-            )
+            if not scilent:
+                scarabee_log(
+                    LogLevel.Info, "Performing P1 criticality spectrum calculation"
+                )
             critical_spectrum = P1CriticalitySpectrum(homogenized_moc)
-        else:
-            scarabee_log(
-                LogLevel.Info, "Performing B1 criticality spectrum calculation"
-            )
+        elif self.leakage_model == CriticalLeakage.B1:
+            if not scilent:
+                scarabee_log(
+                    LogLevel.Info, "Performing B1 criticality spectrum calculation"
+                )
             critical_spectrum = B1CriticalitySpectrum(homogenized_moc)
+        else:
+            if not scilent:
+                scarabee_log(
+                    LogLevel.Info,
+                    "Performing fundamental mode criticality spectrum calculation",
+                )
+            critical_spectrum = FundamentalModeCriticalitySpectrum(homogenized_moc)
 
         self._asmbly_moc.apply_criticality_spectrum(critical_spectrum.flux)
 
-        scarabee_log(LogLevel.Info, "Kinf    : {:.5f}".format(critical_spectrum.k_inf))
-        scarabee_log(
-            LogLevel.Info, "Buckling: {:.5f}".format(critical_spectrum.buckling)
-        )
+        if not scilent:
+            scarabee_log(
+                LogLevel.Info, "Kinf    : {:.5f}".format(critical_spectrum.k_inf)
+            )
+            scarabee_log(
+                LogLevel.Info, "Buckling: {:.5f}".format(critical_spectrum.buckling)
+            )
 
     def apply_infinite_spectrum(self) -> None:
         """
         Undoes the critical flux spectrum adjustment to the MOCDriver.
         This permits subsequent transport calcualtions to converge much faster.
         """
+        if self.leakage_model == CriticalLeakage.NoLeakage:
+            return
+
         if self._infinite_flux_spectrum is not None and self._asmbly_moc is not None:
             self._asmbly_moc.apply_criticality_spectrum(self._infinite_flux_spectrum)
 
@@ -2062,798 +2113,15 @@ class PWRAssembly:
             for i in range(len(self.cells[j])):
                 cell = self.cells[j][i].normalize_flux_spectrum(f)
 
-    def _compute_few_group_flux(self, r: Vector, u: Direction) -> List[float]:
-        """
-        Computes the flux in the few-group scheme at the given position
-        and direction.
-
-        Parameters
-        ----------
-        r : Vector
-            Position where the flux is evaluated.
-        u : Direction
-            Direction vector to disambiguate the position.
-
-        Returns
-        -------
-        list of float
-            Values of the few-group flux at the given position.
-
-        Raises
-        ------
-        RuntimeError
-            If the condensation_scheme attribute is not set.
-        """
-        if self.condensation_scheme is None:
-            raise RuntimeError("Energy condensation scheme not set.")
-
-        flux = [0.0 for G in range(len(self.condensation_scheme))]
-
-        for G in range(len(self.condensation_scheme)):
-            gmin, gmax = self.condensation_scheme[G][:]
-
-            for g in range(gmin, gmax + 1):
-                flux[G] += self._asmbly_moc.flux(r, u, g)
-
-        return flux
-
-    def _compute_average_line_flux(
-        self, segments: List[Tuple[int, float]]
-    ) -> List[float]:
-        """
-        Computes the average flux along a set of line segments in the few-group
-        structure.
-
-        Paramters
-        ---------
-        segments : list of tuples of int and float
-            List of flat source region index and segment length tuples.
-
-        Returns
-        -------
-        list of float
-            Values of the few-group flux alone the line.
-
-        Raises
-        ------
-        RuntimeError
-            If the condensation_scheme attribute is not set.
-        """
-        if self.condensation_scheme is None:
-            raise RuntimeError("Energy condensation scheme not set.")
-
-        total_length = 0.0
-        for s in segments:
-            total_length += s[1]
-        invs_tot_length = 1.0 / total_length
-
-        flux = np.zeros(len(self.condensation_scheme))
-
-        for G in range(len(self.condensation_scheme)):
-            gmin, gmax = self.condensation_scheme[G][:]
-            for g in range(gmin, gmax + 1):
-                for s in segments:
-                    flux[G] += s[1] * self._asmbly_moc.flux(s[0], g)
-
-        flux *= invs_tot_length
-
-        return flux
-
-    def _compute_adf_cdf_from_cmfd(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Computes the assembly and corner discontinuity factors in the few-group
-        structure using the CMFD results. Currently, this method neglects the
-        coupled x-y terms in the nodal construction when computing the CDFs.
-        This simplifies the algorithm, but also ensures problems won't occur if
-        trying to run single-pin cell "assembly" calculations.
-
-        Returns
-        -------
-        ADF : ndarray
-            Assembly Discontinuity Factors
-        CDF : ndarray
-            Corner Discontinuity Factors
-
-        Raises
-        ------
-        RuntimeError
-            If the condensation_scheme attribute is not set or if if is not
-            possible to create a condensation scheme to go from the CMFD group
-            structure to the few-group structure.
-        """
-        if self.condensation_scheme is None:
-            raise RuntimeError("Energy condensation scheme not set.")
-
-        NG = len(self.condensation_scheme)
-
-        # Create the condensation scheme to go from CMFD to few group structure
-        cond_scheme = []
-        for G in range(len(self.condensation_scheme)):
-            cmfd_grps = []
-
-            # Get lower group
-            for g in range(len(self.cmfd_condensation_scheme)):
-                if (
-                    self.cmfd_condensation_scheme[g][0]
-                    == self.condensation_scheme[G][0]
-                ):
-                    cmfd_grps.append(g)
-            if len(cmfd_grps) == 0:
-                raise RuntimeError(
-                    "Could not create condensation scheme from CMFD structure to few-group structure."
-                )
-
-            # Get upper group
-            for g in range(len(self.cmfd_condensation_scheme)):
-                if (
-                    self.cmfd_condensation_scheme[g][-1]
-                    == self.condensation_scheme[G][-1]
-                ):
-                    cmfd_grps.append(g)
-            if len(cmfd_grps) == 1:
-                raise RuntimeError(
-                    "Could not create condensation scheme from CMFD structure to few-group structure."
-                )
-
-            cond_scheme.append(cmfd_grps)
-
-        # Create empty arrays for ADFs and CDFs
-        adf = np.ones((NG, 6))
-        cdf = np.ones((NG, 4))
-
-        # Compute the homogeneous flux for each few-group
-        hom_flux = self._get_hom_flux_from_cmfd(cond_scheme)
-
-        # Now we can go get the surface fluxes
-        if self.symmetry in [Symmetry.Quarter, Symmetry.Half, Symmetry.Full]:
-            het_flux_xp = self._get_het_flux_xp_cmfd(cond_scheme)
-            het_flux_yp = self._get_het_flux_yp_cmfd(cond_scheme)
-            het_flux_I = self._get_het_flux_I_cmfd(cond_scheme)
-
-            adf[:, ADF.XP] = het_flux_xp / hom_flux.flux_x.pos_surf_flux()
-            adf[:, ADF.XN] = adf[:, ADF.XP]
-            adf[:, ADF.YP] = het_flux_yp / hom_flux.flux_y.pos_surf_flux()
-            adf[:, ADF.YN] = adf[:, ADF.YP]
-
-            cdf[:, CDF.I] = het_flux_I / hom_flux(0.5 * hom_flux.dx, 0.5 * hom_flux.dy)
-            cdf[:, CDF.II] = cdf[:, CDF.I]
-            cdf[:, CDF.III] = cdf[:, CDF.I]
-            cdf[:, CDF.IV] = cdf[:, CDF.I]
-
-        if self.symmetry in [Symmetry.Half, Symmetry.Full] or self.independent_quadrant:
-            het_flux_xn = self._get_het_flux_xn_cmfd(cond_scheme)
-            het_flux_II = self._get_het_flux_II_cmfd(cond_scheme)
-
-            adf[:, ADF.XN] = het_flux_xn / hom_flux.flux_x.neg_surf_flux()
-
-            cdf[:, CDF.II] = het_flux_II / hom_flux(
-                -0.5 * hom_flux.dx, 0.5 * hom_flux.dy
-            )
-            cdf[:, CDF.III] = cdf[:, CDF.II]
-
-        if self.symmetry == Symmetry.Full or self.independent_quadrant:
-            het_flux_yn = self._get_het_flux_yn_cmfd(cond_scheme)
-            het_flux_III = self._get_het_flux_III_cmfd(cond_scheme)
-            het_flux_IV = self._get_het_flux_IV_cmfd(cond_scheme)
-
-            adf[:, ADF.YN] = het_flux_yn / hom_flux.flux_y.neg_surf_flux()
-
-            cdf[:, CDF.III] = het_flux_III / hom_flux(
-                -0.5 * hom_flux.dx, -0.5 * hom_flux.dy
-            )
-            cdf[:, CDF.IV] = het_flux_IV / hom_flux(
-                0.5 * hom_flux.dx, -0.5 * hom_flux.dy
-            )
-
-        return adf, cdf
-
-    def _get_hom_flux_from_cmfd(self, cond_scheme: List[List[int]]) -> NodalFlux2D:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        keff = moc.keff
-        cmfd = moc.cmfd
-
-        dx = moc.x_max - moc.x_min
-        dy = moc.y_max - moc.y_min
-
-        # Compute average flux for assembly
-        flux_spec = moc.homogenize_flux_spectrum()
-        avg_flux = np.zeros(NG)
-        for G in range(NG):
-            for g in range(
-                self.condensation_scheme[G][0], self.condensation_scheme[G][1] + 1
-            ):
-                avg_flux[G] += flux_spec[g]
-
-        # Homogenize the xs and condense for assembly
-        fine_xs = moc.homogenize()
-        fine_diff_xs = fine_xs.diffusion_xs()
-        few_diff_xs = fine_diff_xs.condense(self.condensation_scheme, flux_spec)
-
-        # Condense currents for the assembly
-        j_x_neg = self._get_avg_x_neg_current_cmfd(cond_scheme)
-        j_x_pos = self._get_avg_x_pos_current_cmfd(cond_scheme)
-        j_y_neg = self._get_avg_y_neg_current_cmfd(cond_scheme)
-        j_y_pos = self._get_avg_y_pos_current_cmfd(cond_scheme)
-
-        return NodalFlux2D(
-            dx, dy, keff, few_diff_xs, avg_flux, j_x_neg, j_x_pos, j_y_neg, j_y_pos
-        )
-
-    def _get_het_flux_I_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        cmfd = self._asmbly_moc.cmfd
-        i = cmfd.nx - 1
-        j = cmfd.ny - 1
-
-        tile_nodal_flux = self._get_2d_nodal_flux_from_cmfd(cond_scheme, i, j)
-        return tile_nodal_flux(0.5 * tile_nodal_flux.dx, 0.5 * tile_nodal_flux.dy)
-
-    def _get_het_flux_II_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        cmfd = self._asmbly_moc.cmfd
-        i = 0
-        j = cmfd.ny - 1
-
-        tile_nodal_flux = self._get_2d_nodal_flux_from_cmfd(cond_scheme, i, j)
-        return tile_nodal_flux(-0.5 * tile_nodal_flux.dx, 0.5 * tile_nodal_flux.dy)
-
-    def _get_het_flux_III_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        cmfd = self._asmbly_moc.cmfd
-        i = 0
-        j = 0
-
-        tile_nodal_flux = self._get_2d_nodal_flux_from_cmfd(cond_scheme, i, j)
-        return tile_nodal_flux(-0.5 * tile_nodal_flux.dx, -0.5 * tile_nodal_flux.dy)
-
-    def _get_het_flux_IV_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        cmfd = self._asmbly_moc.cmfd
-        i = cmfd.nx - 1
-        j = 0
-
-        tile_nodal_flux = self._get_2d_nodal_flux_from_cmfd(cond_scheme, i, j)
-        return tile_nodal_flux(0.5 * tile_nodal_flux.dx, -0.5 * tile_nodal_flux.dy)
-
-    def _get_2d_nodal_flux_from_cmfd(
-        self, cond_scheme: List[List[int]], i: int, j: int
-    ) -> NodalFlux2D:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        keff = moc.keff
-        cmfd = moc.cmfd
-
-        dx = cmfd.dx[i]
-        dy = cmfd.dy[j]
-
-        # Get surface indices
-        s_x_neg = cmfd.get_x_neg_surf(i, j)
-        s_x_pos = cmfd.get_x_pos_surf(i, j)
-        s_y_neg = cmfd.get_y_neg_surf(i, j)
-        s_y_pos = cmfd.get_y_pos_surf(i, j)
-
-        # Homogenize average flux for the tile
-        cmfd_tile_fsrs = cmfd.tile_fsr_list(i, j)
-        tile_flux_spec = moc.homogenize_flux_spectrum(cmfd_tile_fsrs)
-        avg_flux = np.zeros(NG)
-        for G in range(NG):
-            for g in range(
-                self.condensation_scheme[G][0], self.condensation_scheme[G][1] + 1
-            ):
-                avg_flux[G] += tile_flux_spec[g]
-
-        # Homogenize the xs and condense
-        fine_tile_xs = moc.homogenize(cmfd_tile_fsrs)
-        fine_tile_diff_xs = fine_tile_xs.diffusion_xs()
-        few_diff_xs = fine_tile_diff_xs.condense(
-            self.condensation_scheme, tile_flux_spec
-        )
-
-        # Condense currents for the tile
-        j_x_neg = np.zeros(NG)
-        j_x_pos = np.zeros(NG)
-        j_y_neg = np.zeros(NG)
-        j_y_pos = np.zeros(NG)
-        for G in range(NG):
-            for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                j_x_neg[G] += cmfd.current(g, s_x_neg)
-                j_x_pos[G] += cmfd.current(g, s_x_pos)
-                j_y_neg[G] += cmfd.current(g, s_y_neg)
-                j_y_pos[G] += cmfd.current(g, s_y_pos)
-
-        return NodalFlux2D(
-            dx, dy, keff, few_diff_xs, avg_flux, j_x_neg, j_x_pos, j_y_neg, j_y_pos
-        )
-
-    def _get_avg_x_pos_current_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        cmfd = moc.cmfd
-
-        current = np.zeros(NG)
-
-        dlts = cmfd.dy
-
-        i = cmfd.nx - 1
-        for j in range(cmfd.ny):
-            # Get surface indices
-            s = cmfd.get_x_pos_surf(i, j)
-
-            # Condense currents for the tile
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    # Weight current contribution by length of segment
-                    current[G] += cmfd.current(g, s) * dlts[j]
-
-        # Normalize by length of xp surface
-        current /= moc.y_max - moc.y_min
-        return current
-
-    def _get_avg_x_neg_current_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        cmfd = moc.cmfd
-
-        current = np.zeros(NG)
-
-        dlts = cmfd.dy
-
-        i = 0
-        for j in range(cmfd.ny):
-            # Get surface indices
-            s = cmfd.get_x_neg_surf(i, j)
-
-            # Condense currents for the tile
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    # Weight current contribution by length of segment
-                    current[G] += cmfd.current(g, s) * dlts[j]
-
-        # Normalize by length of xp surface
-        current /= moc.y_max - moc.y_min
-        return current
-
-    def _get_avg_y_pos_current_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        cmfd = moc.cmfd
-
-        current = np.zeros(NG)
-
-        dlts = cmfd.dx
-
-        j = cmfd.ny - 1
-        for i in range(cmfd.nx):
-            # Get surface indices
-            s = cmfd.get_y_pos_surf(i, j)
-
-            # Condense currents for the tile
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    # Weight current contribution by length of segment
-                    current[G] += cmfd.current(g, s) * dlts[i]
-
-        # Normalize by length of xp surface
-        current /= moc.x_max - moc.x_min
-        return current
-
-    def _get_avg_y_neg_current_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        cmfd = moc.cmfd
-
-        current = np.zeros(NG)
-
-        dlts = cmfd.dx
-
-        j = 0
-        for i in range(cmfd.nx):
-            # Get surface indices
-            s = cmfd.get_y_neg_surf(i, j)
-
-            # Condense currents for the tile
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    # Weight current contribution by length of segment
-                    current[G] += cmfd.current(g, s) * dlts[i]
-
-        # Normalize by length of xp surface
-        current /= moc.x_max - moc.x_min
-        return current
-
-    def _get_het_flux_xp_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        keff = moc.keff
-        cmfd = moc.cmfd
-
-        dlts = cmfd.dy
-
-        node_fluxes = []
-
-        i = cmfd.nx - 1
-        x_min = 0.0
-        x_max = cmfd.dx[-1]
-        for j in range(cmfd.ny):
-            # For tile (i, j), get the FSR list
-            cmfd_tile_fsrs = cmfd.tile_fsr_list(i, j)
-
-            # Get surface indices
-            s_neg = cmfd.get_x_neg_surf(i, j)
-            s_pos = cmfd.get_x_pos_surf(i, j)
-
-            # Homogenize average flux for the tile
-            tile_flux_spec = moc.homogenize_flux_spectrum(cmfd_tile_fsrs)
-            avg_flux = np.zeros(NG)
-            for G in range(NG):
-                for g in range(
-                    self.condensation_scheme[G][0], self.condensation_scheme[G][1] + 1
-                ):
-                    avg_flux[G] += tile_flux_spec[g]
-
-            # Homogenize the xs and condense
-            fine_tile_xs = moc.homogenize(cmfd_tile_fsrs)
-            fine_tile_diff_xs = fine_tile_xs.diffusion_xs()
-            few_diff_xs = fine_tile_diff_xs.condense(
-                self.condensation_scheme, tile_flux_spec
-            )
-
-            # Condense currents for the tile
-            j_neg = np.zeros(NG)
-            j_pos = np.zeros(NG)
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    j_neg[G] += cmfd.current(g, s_neg)
-                    j_pos[G] += cmfd.current(g, s_pos)
-
-            # Create 1D nodal flux object
-            node_fluxes.append(
-                NodalFlux1D(x_min, x_max, keff, few_diff_xs, avg_flux, j_neg, j_pos)
-            )
-
-        # Now we need to get the average heterogeneous flux on the surface
-        het_flux = np.zeros(NG)
-        for G in range(NG):
-            for j in range(cmfd.ny):
-                het_flux[G] += node_fluxes[j].pos_surf_flux(G) * dlts[j]
-        het_flux /= moc.y_max - moc.y_min
-
-        return het_flux
-
-    def _get_het_flux_xn_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        keff = moc.keff
-        cmfd = moc.cmfd
-
-        dlts = cmfd.dy
-
-        node_fluxes = []
-
-        i = 0
-        x_min = 0.0
-        x_max = cmfd.dx[0]
-        for j in range(cmfd.ny):
-            # For tile (i, j), get the FSR list
-            cmfd_tile_fsrs = cmfd.tile_fsr_list(i, j)
-
-            # Get surface indices
-            s_neg = cmfd.get_x_neg_surf(i, j)
-            s_pos = cmfd.get_x_pos_surf(i, j)
-
-            # Homogenize average flux for the tile
-            tile_flux_spec = moc.homogenize_flux_spectrum(cmfd_tile_fsrs)
-            avg_flux = np.zeros(NG)
-            for G in range(NG):
-                for g in range(
-                    self.condensation_scheme[G][0], self.condensation_scheme[G][1] + 1
-                ):
-                    avg_flux[G] += tile_flux_spec[g]
-
-            # Homogenize the xs and condense
-            fine_tile_xs = moc.homogenize(cmfd_tile_fsrs)
-            fine_tile_diff_xs = fine_tile_xs.diffusion_xs()
-            few_diff_xs = fine_tile_diff_xs.condense(
-                self.condensation_scheme, tile_flux_spec
-            )
-
-            # Condense currents for the tile
-            j_neg = np.zeros(NG)
-            j_pos = np.zeros(NG)
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    j_neg[G] += cmfd.current(g, s_neg)
-                    j_pos[G] += cmfd.current(g, s_pos)
-
-            # Create 1D nodal flux object
-            node_fluxes.append(
-                NodalFlux1D(x_min, x_max, keff, few_diff_xs, avg_flux, j_neg, j_pos)
-            )
-
-        # Now we need to get the average heterogeneous flux on the surface
-        het_flux = np.zeros(NG)
-        for G in range(NG):
-            for j in range(cmfd.ny):
-                het_flux[G] += node_fluxes[j].neg_surf_flux(G) * dlts[j]
-        het_flux /= moc.y_max - moc.y_min
-
-        return het_flux
-
-    def _get_het_flux_yp_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        keff = moc.keff
-        cmfd = moc.cmfd
-
-        dlts = cmfd.dx
-
-        node_fluxes = []
-
-        j = cmfd.ny - 1
-        y_min = 0.0
-        y_max = cmfd.dy[-1]
-        for i in range(cmfd.nx):
-            # For tile (i, j), get the FSR list
-            cmfd_tile_fsrs = cmfd.tile_fsr_list(i, j)
-
-            # Get surface indices
-            s_neg = cmfd.get_y_neg_surf(i, j)
-            s_pos = cmfd.get_y_pos_surf(i, j)
-
-            # Homogenize average flux for the tile
-            tile_flux_spec = moc.homogenize_flux_spectrum(cmfd_tile_fsrs)
-            avg_flux = np.zeros(NG)
-            for G in range(NG):
-                for g in range(
-                    self.condensation_scheme[G][0], self.condensation_scheme[G][1] + 1
-                ):
-                    avg_flux[G] += tile_flux_spec[g]
-
-            # Homogenize the xs and condense
-            fine_tile_xs = moc.homogenize(cmfd_tile_fsrs)
-            fine_tile_diff_xs = fine_tile_xs.diffusion_xs()
-            few_diff_xs = fine_tile_diff_xs.condense(
-                self.condensation_scheme, tile_flux_spec
-            )
-
-            # Condense currents for the tile
-            j_neg = np.zeros(NG)
-            j_pos = np.zeros(NG)
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    j_neg[G] += cmfd.current(g, s_neg)
-                    j_pos[G] += cmfd.current(g, s_pos)
-
-            # Create 1D nodal flux object
-            node_fluxes.append(
-                NodalFlux1D(y_min, y_max, keff, few_diff_xs, avg_flux, j_neg, j_pos)
-            )
-
-        # Now we need to get the average heterogeneous flux on the surface
-        het_flux = np.zeros(NG)
-        for G in range(NG):
-            for i in range(cmfd.nx):
-                het_flux[G] += node_fluxes[i].pos_surf_flux(G) * dlts[i]
-        het_flux /= moc.x_max - moc.x_min
-
-        return het_flux
-
-    def _get_het_flux_yn_cmfd(self, cond_scheme: List[List[int]]) -> np.ndarray:
-        NG = len(cond_scheme)
-        moc = self._asmbly_moc
-        keff = moc.keff
-        cmfd = moc.cmfd
-
-        dlts = cmfd.dx
-        node_fluxes = []
-
-        j = 0
-        y_min = 0.0
-        y_max = cmfd.dy[0]
-        for i in range(cmfd.nx):
-            # For tile (i, j), get the FSR list
-            cmfd_tile_fsrs = cmfd.tile_fsr_list(i, j)
-
-            # Get surface indices
-            s_neg = cmfd.get_y_neg_surf(i, j)
-            s_pos = cmfd.get_y_pos_surf(i, j)
-
-            # Homogenize average flux for the tile
-            tile_flux_spec = moc.homogenize_flux_spectrum(cmfd_tile_fsrs)
-            avg_flux = np.zeros(NG)
-            for G in range(NG):
-                for g in range(
-                    self.condensation_scheme[G][0], self.condensation_scheme[G][1] + 1
-                ):
-                    avg_flux[G] += tile_flux_spec[g]
-
-            # Homogenize the xs and condense
-            fine_tile_xs = moc.homogenize(cmfd_tile_fsrs)
-            fine_tile_diff_xs = fine_tile_xs.diffusion_xs()
-            few_diff_xs = fine_tile_diff_xs.condense(
-                self.condensation_scheme, tile_flux_spec
-            )
-
-            # Condense currents for the tile
-            j_neg = np.zeros(NG)
-            j_pos = np.zeros(NG)
-            for G in range(NG):
-                for g in range(cond_scheme[G][0], cond_scheme[G][1] + 1):
-                    j_neg[G] += cmfd.current(g, s_neg)
-                    j_pos[G] += cmfd.current(g, s_pos)
-
-            # Create 1D nodal flux object
-            node_fluxes.append(
-                NodalFlux1D(y_min, y_max, keff, few_diff_xs, avg_flux, j_neg, j_pos)
-            )
-
-        # Now we need to get the average heterogeneous flux on the surface
-        het_flux = np.zeros(NG)
-        for G in range(NG):
-            for i in range(cmfd.nx):
-                het_flux[G] += node_fluxes[i].neg_surf_flux(G) * dlts[i]
-        het_flux /= moc.x_max - moc.x_min
-
-        return het_flux
-
-    def _compute_adf_cdf_from_moc(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Computes the assembly and corner discontinuity factors in the few-group
-        structure using the MOC results.
-
-        Returns
-        -------
-        ADF : ndarray
-            Assembly Discontinuity Factors
-        CDF : ndarray
-            Corner Discontinuity Factors
-
-        Raises
-        ------
-        RuntimeError
-            If the condensation_scheme attribute is not set.
-        """
-        if self.condensation_scheme is None:
-            raise RuntimeError("Energy condensation scheme not set.")
-
-        NG = len(self.condensation_scheme)
-        moc = self._asmbly_moc
-
-        # First, compute the homogeneous flux
-        homog_flux = np.zeros(NG)
-        total_volume = 0.0
-        for i in range(moc.nfsr):
-            Vi = moc.volume(i)
-            total_volume += Vi
-
-            for G in range(NG):
-                gmin, gmax = self.condensation_scheme[G][:]
-                for g in range(gmin, gmax + 1):
-                    homog_flux[G] += Vi * moc.flux(i, g)
-        homog_flux /= total_volume
-
-        # Create empty arrays for ADFs and CDFs
-        adf = np.ones((NG, 6))
-        cdf = np.zeros((NG, 4))
-
-        if self.symmetry == Symmetry.Full or (
-            self.symmetry == Symmetry.Quarter and self.independent_quadrant
-        ):
-            # Get flux along surfaces
-            xn_segments = moc.trace_fsr_segments(
-                Vector(moc.x_min + 0.001, moc.y_max), Direction(0.0, -1.0)
-            )
-            xp_segments = moc.trace_fsr_segments(
-                Vector(moc.x_max - 0.001, moc.y_max), Direction(0.0, -1.0)
-            )
-            yn_segments = moc.trace_fsr_segments(
-                Vector(moc.x_min, moc.y_min + 0.001), Direction(1.0, 0.0)
-            )
-            yp_segments = moc.trace_fsr_segments(
-                Vector(moc.x_min, moc.y_max - 0.001), Direction(1.0, 0.0)
-            )
-            xn_flx = self._compute_average_line_flux(xn_segments)
-            xp_flx = self._compute_average_line_flux(xp_segments)
-            yn_flx = self._compute_average_line_flux(yn_segments)
-            yp_flx = self._compute_average_line_flux(yp_segments)
-
-            # Get flux at corners
-            I_flx = self._compute_few_group_flux(
-                Vector(moc.x_max - 0.001, moc.y_max - 0.001), Direction(-1.0, -1.0)
-            )
-            II_flx = self._compute_few_group_flux(
-                Vector(moc.x_min + 0.001, moc.y_max - 0.001), Direction(1.0, -1.0)
-            )
-            III_flx = self._compute_few_group_flux(
-                Vector(moc.x_min + 0.001, moc.y_min + 0.001), Direction(1.0, 1.0)
-            )
-            IV_flx = self._compute_few_group_flux(
-                Vector(moc.x_max - 0.001, moc.y_min + 0.001), Direction(-1.0, 1.0)
-            )
-
-            for G in range(NG):
-                adf[G, ADF.XN] = xn_flx[G] / homog_flux[G]
-                adf[G, ADF.XP] = xp_flx[G] / homog_flux[G]
-                adf[G, ADF.YN] = yn_flx[G] / homog_flux[G]
-                adf[G, ADF.YP] = yp_flx[G] / homog_flux[G]
-                # The ADFs on the +/- Z sides will be left at unity
-
-                cdf[G, CDF.I] = I_flx[G] / homog_flux[G]
-                cdf[G, CDF.II] = II_flx[G] / homog_flux[G]
-                cdf[G, CDF.III] = III_flx[G] / homog_flux[G]
-                cdf[G, CDF.IV] = IV_flx[G] / homog_flux[G]
-
-        elif self.symmetry == Symmetry.Half:
-            # Get flux along surfaces
-            xn_segments = moc.trace_fsr_segments(
-                Vector(moc.x_min + 0.001, moc.y_max), Direction(0.0, -1.0)
-            )
-            xp_segments = moc.trace_fsr_segments(
-                Vector(moc.x_max - 0.001, moc.y_max), Direction(0.0, -1.0)
-            )
-            yp_segments = moc.trace_fsr_segments(
-                Vector(moc.x_min, moc.y_max - 0.001), Direction(1.0, 0.0)
-            )
-            xn_flx = self._compute_average_line_flux(xn_segments)
-            xp_flx = self._compute_average_line_flux(xp_segments)
-            yp_flx = self._compute_average_line_flux(yp_segments)
-
-            # Get flux at corners
-            I_flx = self._compute_few_group_flux(
-                Vector(moc.x_max - 0.001, moc.y_max - 0.001), Direction(-1.0, -1.0)
-            )
-            II_flx = self._compute_few_group_flux(
-                Vector(moc.x_min + 0.001, moc.y_max - 0.001), Direction(1.0, -1.0)
-            )
-
-            for G in range(NG):
-                adf[G, ADF.XN] = xn_flx[G] / homog_flux[G]
-                adf[G, ADF.XP] = xp_flx[G] / homog_flux[G]
-                adf[G, ADF.YP] = yp_flx[G] / homog_flux[G]
-                adf[G, ADF.YN] = adf[G, ADF.YP]
-                # The ADFs on the +/- Z sides will be left at unity
-
-                cdf[G, CDF.I] = I_flx[G] / homog_flux[G]
-                cdf[G, CDF.II] = II_flx[G] / homog_flux[G]
-                cdf[G, CDF.III] = cdf[G, CDF.II]
-                cdf[G, CDF.IV] = cdf[G, CDF.I]
-
-        else:  # Quarter symmetry
-            # Get flux along surfaces
-            xp_segments = moc.trace_fsr_segments(
-                Vector(moc.x_max - 0.001, moc.y_max), Direction(0.0, -1.0)
-            )
-            yp_segments = moc.trace_fsr_segments(
-                Vector(moc.x_min, moc.y_max - 0.001), Direction(1.0, 0.0)
-            )
-            xp_flx = self._compute_average_line_flux(xp_segments)
-            yp_flx = self._compute_average_line_flux(yp_segments)
-
-            # Get flux at corners
-            I_flx = self._compute_few_group_flux(
-                Vector(moc.x_max - 0.001, moc.y_max - 0.001), Direction(-1.0, -1.0)
-            )
-
-            for G in range(NG):
-                adf[G, ADF.XP] = xp_flx[G] / homog_flux[G]
-                adf[G, ADF.XN] = adf[G, ADF.XP]
-                adf[G, ADF.YP] = yp_flx[G] / homog_flux[G]
-                adf[G, ADF.YN] = adf[G, ADF.YP]
-                # The ADFs on the +/- Z sides will be left at unity
-
-                cdf[G, CDF.I] = I_flx[G] / homog_flux[G]
-                cdf[G, CDF.II] = cdf[G, CDF.I]
-                cdf[G, CDF.III] = cdf[G, CDF.I]
-                cdf[G, CDF.IV] = cdf[G, CDF.I]
-
-        return adf, cdf
-
-    def _compute_form_factors(self) -> np.ndarray:
+    def _compute_form_factors(self) -> FormFactors:
         """
         Computes the one group pin power form factors for the full assembly.
 
         Returns
         -------
-        ndarray
-            A 2D Numpy array for the pin power form factors. First index is
-            y (from high to low) and the second index is x (from low to high).
+        FormFactors
+            A FormFactors object for the pin power reconstruction. First index
+            is y (from high to low) and second index is x (from low to high).
         """
         if self.symmetry == Symmetry.Quarter and self.independent_quadrant:
             ff = np.zeros((self._simulated_shape[1], self._simulated_shape[0]))
@@ -2871,7 +2139,20 @@ class PWRAssembly:
             mean_ff = np.mean(ff)
             ff /= mean_ff
 
-            return ff
+            # Create the widths arrays
+            x_widths = np.zeros(len(self.cells[0]))
+            y_widths = np.zeros(len(self.cells))
+            x_widths[:] = self.pitch
+            y_widths[:] = self.pitch
+            if self.shape[0] % 2 == 1 and self.shape[1] % 2 == 1:
+                x_widths[0] *= 0.5
+                y_widths[0] *= 0.5
+            gap_width = 0.5 * (self.assembly_pitch - self.shape[0] * self.pitch)
+            if gap_width > 0.0:
+                x_widths[-1] += gap_width
+                y_widths[-1] += gap_width
+
+            return FormFactors(ff, x_widths, y_widths)
 
         else:
             ff = np.zeros((self.shape[1], self.shape[0]))
@@ -2905,7 +2186,19 @@ class PWRAssembly:
             mean_ff = np.mean(ff)
             ff /= mean_ff
 
-            return ff
+            # Create the widths arrays
+            x_widths = np.zeros(self.shape[1])
+            y_widths = np.zeros(self.shape[0])
+            x_widths[:] = self.pitch
+            y_widths[:] = self.pitch
+            gap_width = 0.5 * (self.assembly_pitch - self.shape[0] * self.pitch)
+            if gap_width > 0.0:
+                x_widths[0] += gap_width
+                y_widths[0] += gap_width
+                x_widths[-1] += gap_width
+                y_widths[-1] += gap_width
+
+            return FormFactors(ff, x_widths, y_widths)
 
     def _compute_few_group_xs(self) -> DiffusionCrossSection:
         """
@@ -2932,21 +2225,139 @@ class PWRAssembly:
         # chosen to go with Smith's recommendation of performing energy
         # condensation on the diffusion coefficients.
 
+        # Get homogenized cross sections for assembly in MOC group structure
         homog_xs = self._asmbly_moc.homogenize()
+
+        # Obtain the flux spectrum for condensation
+        if self.leakage_corrections or self.leakage_model == CriticalLeakage.NoLeakage:
+            flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
+        elif self.leakage_model == CriticalLeakage.P1:
+            flux_spectrum = P1CriticalitySpectrum(homog_xs).flux
+        elif self.leakage_model == CriticalLeakage.B1:
+            flux_spectrum = B1CriticalitySpectrum(homog_xs).flux
+        else:
+            flux_spectrum = FundamentalModeCriticalitySpectrum(homog_xs).flux
+
+        # Convert xs to diffusion xs, then condense
         diff_xs = homog_xs.diffusion_xs()
-        flux_spectrum = self._asmbly_moc.homogenize_flux_spectrum()
         return diff_xs.condense(self.condensation_scheme, flux_spectrum)
 
-    def _compute_diffusion_data(self) -> DiffusionData:
+    def _compute_leakage_corrections(self) -> LeakageCorrections:
         """
-        Computes the nodal diffusion data for the assembly.
+        Computes the coefficients used by the nodal diffusion solver to update
+        the few-group cross sections based on the in-situ leakage in the full
+        core simulation.
+        """
+        if self.condensation_scheme is None:
+            raise RuntimeError("Energy condensation scheme not set.")
+
+        if self.leakage_model == CriticalLeakage.NoLeakage:
+            raise RuntimeError(
+                "Cannot generate leakage corrections without a leakage model."
+            )
+
+        # Fitting function
+        def fnc(xdata, C):
+            return C * xdata
+
+        # Number of few-groups
+        NG = len(self.condensation_scheme)
+
+        # initialize the leakage correction object
+        lc = LeakageCorrections(NG)
+
+        # Get list of bucklings, and generate all few-group cross section sets
+        NB = 11  # Must be odd !
+        B2s = np.linspace(start=-0.01, stop=0.01, num=NB)
+        xss = []
+        homog_xs = self._asmbly_moc.homogenize()
+        diff_xs = homog_xs.diffusion_xs()
+        for B2 in B2s:
+            if self.leakage_model == CriticalLeakage.P1:
+                flux_spectrum = P1CriticalitySpectrum(homog_xs, B2).flux
+            elif self.leakage_model == CriticalLeakage.B1:
+                flux_spectrum = B1CriticalitySpectrum(homog_xs, B2).flux
+            else:
+                flux_spectrum = FundamentalModeCriticalitySpectrum(homog_xs, B2).flux
+            xss.append(diff_xs.condense(self.condensation_scheme, flux_spectrum))
+        xs_ref = xss[int(NB / 2)]
+
+        D = np.zeros(NB)
+        Ea = np.zeros(NB)
+        Ef = np.zeros(NB)
+        vEf = np.zeros(NB)
+        Es = np.zeros(NB)
+        for G_in in range(NG):
+            D.fill(0.0)
+            Ea.fill(0.0)
+            Ef.fill(0.0)
+            vEf.fill(0.0)
+
+            # For this group, fill all the buckling dependent data
+            for b in range(NB):
+                D[b] = xss[b].D(G_in)
+                Ea[b] = xss[b].Ea(G_in)
+                Ef[b] = xss[b].Ef(G_in)
+                vEf[b] = xss[b].vEf(G_in)
+
+            # Compute the leakage to loss ratio
+            LRr = (D * B2s) / (xs_ref.Er(G_in))
+
+            # Compute fractional changes
+            f_D = (D - xs_ref.D(G_in)) / xs_ref.D(G_in)
+            f_Ea = (Ea - xs_ref.Ea(G_in)) / xs_ref.Ea(G_in)
+            f_Ef = (Ef - xs_ref.Ef(G_in)) / xs_ref.Ef(G_in)
+            f_vEf = (vEf - xs_ref.vEf(G_in)) / xs_ref.vEf(G_in)
+
+            # Fit leakage correction coefficients
+            C_D, _ = curve_fit(fnc, LRr, f_D)
+            C_Ea, _ = curve_fit(fnc, LRr, f_Ea)
+            C_Ef, _ = curve_fit(fnc, LRr, f_Ef)
+            C_vEf, _ = curve_fit(fnc, LRr, f_vEf)
+
+            # Store computed values
+            lc.set_D(G_in, C_D)
+            lc.set_Ea(G_in, C_Ea)
+            lc.set_Ef(G_in, C_Ef)
+            lc.set_vEf(G_in, C_vEf)
+
+            # Do same for each down-scattering transition
+            for G_out in range(G_in + 1, NG):
+                Es.fill(0.0)
+                for b in range(NB):
+                    Es[b] = xss[b].Es(G_in, G_out)
+                f_Es = (Es - xs_ref.Es(G_in, G_out)) / xs_ref.Es(G_in, G_out)
+                C_Es, _ = curve_fit(fnc, LRr, f_Es)
+                lc.set_Es(G_in, G_out, C_Es)
+
+        return lc
+
+    def _compute_diffusion_data_and_form_factors(
+        self,
+    ) -> Tuple[DiffusionData, FormFactors]:
+        """
+        Computes the nodal diffusion data for the assembly along with the form
+        factors for pin power reconstruction.
+
+        If self.leakage_corrections is True, the coefficients used to update
+        the few-group cross sections in the nodal diffusion solver based on the
+        in-situ leakge will be computed. In this case, the few-group cross
+        sections DO NOT have the leakage model applied. Otherwise, the leakage
+        correction coefficients are not generated and the few-group cross
+        sections are leakage corrected.
 
         Returns
         -------
         DiffusionData
             Few-group diffusion cross sections and discontinuity factors.
+        FormFactors
+            Form factors to be used for pin power reconstruction.
         """
+        if self.condensation_scheme is None:
+            raise RuntimeError("Energy condensation scheme not set.")
+
         diff_xs = self._compute_few_group_xs()
+
         ff = self._compute_form_factors()
 
         if (
@@ -2956,14 +2367,40 @@ class PWRAssembly:
         ):
             # If we are using CMFD, we should use the currents to generate the
             # ADFs and CDFs, as it is far more accurate, as explained by Smith [1].
-            adf, cdf = self._compute_adf_cdf_from_cmfd()
+            adf, cdf = compute_adf_cdf_from_cmfd(
+                self._asmbly_moc,
+                self.condensation_scheme,
+                self.symmetry,
+                self.independent_quadrant,
+            )
         else:
             if not self.prefer_moc_adf_cdf:
                 mssg = "CMFD is not on. Accurate discontinuity factors cannot be computed without CMFD."
                 scarabee_log(LogLevel.Warning, mssg)
-            adf, cdf = self._compute_adf_cdf_from_moc()
+            adf, cdf = compute_adf_cdf_from_moc(
+                self._asmbly_moc,
+                self.condensation_scheme,
+                self.symmetry,
+                self.independent_quadrant,
+            )
 
-        return DiffusionData(diff_xs, ff, adf, cdf)
+        diff_data = DiffusionData(diff_xs, adf, cdf)
+
+        if self.leakage_corrections and self.leakage_model == CriticalLeakage.NoLeakage:
+            scarabee_log(
+                LogLevel.Warning,
+                "Leakage corrections were requested, but no critical leakage model is provided.",
+            )
+            scarabee_log(
+                LogLevel.Warning,
+                "Leakage correction coefficients WILL NOT be generated.",
+            )
+        elif (
+            self.leakage_corrections and self.leakage_model != CriticalLeakage.NoLeakage
+        ):
+            diff_data.leakage_corrections = self._compute_leakage_corrections()
+
+        return diff_data, ff
 
     def _run_assembly_calculation(
         self,
@@ -3060,6 +2497,7 @@ class PWRAssembly:
         self._exposures = np.zeros(self.depletion_exposure_steps.size + 1)
         self._times = np.zeros(self.depletion_exposure_steps.size + 1)
         self._diffusion_data = []
+        self._form_factors = []
 
         for t, dt in enumerate(self.depletion_time_steps):
             if t > 0:
@@ -3068,8 +2506,9 @@ class PWRAssembly:
                 )
                 self._times[t] = self._times[t - 1] + self.depletion_time_steps[t - 1]
 
-            scarabee_log(LogLevel.Info, "")
-            scarabee_log(LogLevel.Info, 60 * "-")
+                # Don't write separating line at first iteration
+                scarabee_log(LogLevel.Info, 60 * "-")
+
             scarabee_log(LogLevel.Info, "Running Time Step {:}".format(t))
             scarabee_log(
                 LogLevel.Info, "Exposure: {:.3E} MWd/kg".format(self._exposures[t])
@@ -3088,7 +2527,9 @@ class PWRAssembly:
             self._run_assembly_calculation(True)
             scarabee_log(LogLevel.Info, "")
             self._keff[t] = self._asmbly_moc.keff
-            self._diffusion_data.append(self._compute_diffusion_data())
+            dd, ff = self._compute_diffusion_data_and_form_factors()
+            self._diffusion_data.append(dd)
+            self._form_factors.append(ff)
 
             # Predic isotopes at midpoint of step
             self._predict_depletion(dt_sec, dtm1_sec)
@@ -3099,6 +2540,8 @@ class PWRAssembly:
 
             # Do correction step for isotopes
             self._correct_depletion(dt_sec, dtm1_sec)
+
+            scarabee_log(LogLevel.Info, "")
 
         # Run last step at the end to get keff for our final material compositions
         scarabee_log(LogLevel.Info, "")
@@ -3115,7 +2558,9 @@ class PWRAssembly:
         scarabee_log(LogLevel.Info, "")
         self._run_assembly_calculation(True)
         self._keff[-1] = self._asmbly_moc.keff
-        self._diffusion_data.append(self._compute_diffusion_data())
+        dd, ff = self._compute_diffusion_data_and_form_factors()
+        self._diffusion_data.append(dd)
+        self._form_factors.append(ff)
         scarabee_log(LogLevel.Info, "")
 
     def solve(self) -> None:
@@ -3128,7 +2573,9 @@ class PWRAssembly:
             # Single one-off calulcation
             self._run_assembly_calculation(True)
             self._keff = self._asmbly_moc.keff
-            self._diffusion_data = self._compute_diffusion_data()
+            self._diffusion_data, self._form_factors = (
+                self._compute_diffusion_data_and_form_factors()
+            )
         else:
             # Run depletion steps
             self._run_depletion_steps()

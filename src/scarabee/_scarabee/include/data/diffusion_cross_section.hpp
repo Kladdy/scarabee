@@ -9,11 +9,12 @@
 #include <cereal/cereal.hpp>
 #include <cereal/types/string.hpp>
 
-#include <cstdint>
 #include <memory>
 #include <string>
 
 namespace scarabee {
+
+class NEMDiffusionDriver;
 
 class DiffusionCrossSection {
  public:
@@ -82,8 +83,11 @@ class DiffusionCrossSection {
 
   void check_xs();
 
-  friend class cereal::access;
+  // This is needed so that the NEM solver can update cross sections for
+  // leakakge durring the solve
+  friend class NEMDiffusionDriver;
 
+  friend class cereal::access;
   DiffusionCrossSection() {}
 
   template <class Archive>

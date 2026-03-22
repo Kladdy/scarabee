@@ -1,6 +1,7 @@
 #include <moc/cmfd.hpp>
 #include <moc/moc_driver.hpp>
 #include <utils/constants.hpp>
+#include <utils/homogenization.hpp>
 #include <utils/logging.hpp>
 #include <utils/scarabee_exception.hpp>
 #include <utils/simulation_mode.hpp>
@@ -552,16 +553,21 @@ void CMFD::normalize_currents() {
   surface_currents_normalized_ = true;
 }
 
-void CMFD::compute_homogenized_xs_and_flux(const MOCDriver& moc) {
+void CMFD::compute_homogenized_xs_and_flux(
+    const MOCDriver& moc,
+    const std::function<double&(std::size_t, std::size_t)>& next_flux) {
+  HomogenizationAdaptor homog_adapt(moc, next_flux);
+
 #pragma omp parallel for
   for (int ii = 0; ii < static_cast<int>(nx_); ii++) {
     std::size_t i = static_cast<std::size_t>(ii);
 
     for (std::size_t j = 0; j < ny_; j++) {
       const auto indx = this->tile_to_indx(i, j);
-      const auto fg_xs = moc.homogenize(fsrs_[indx]);
+      const auto fg_xs = scarabee::homogenize(homog_adapt, fsrs_[indx]);
       const auto fg_dxs = fg_xs->diffusion_xs();
-      const auto flux_spec = moc.homogenize_flux_spectrum(fsrs_[indx]);
+      const auto flux_spec =
+          scarabee::homogenize_flux_spectrum(homog_adapt, fsrs_[indx]);
       auto& xs = xs_(i, j);
       if (xs)
         *xs = *(fg_dxs->condense(group_condensation_, flux_spec));
@@ -1118,7 +1124,8 @@ void CMFD::create_loss_matrix(const MOCDriver& moc) {
       auto [Dyn, Dnl_yn] =
           calc_surf_diffusion_coeffs(i, j, g, CMFD::TileSurf::YN, moc);
 
-      if (Dnl_xp > Dxp || Dnl_xn > Dxn || Dnl_yp > Dyp || Dnl_yn > Dyn) {
+      if ((Dnl_xp > Dxp || Dnl_xn > Dxn || Dnl_yp > Dyp || Dnl_yn > Dyn) &&
+          cmfd_solves_ > 10) {
         auto mssg =
             "At least one transport corrected diffusion coefficient is greater "
             "than its non-corrected counterpart";
@@ -1182,7 +1189,7 @@ void CMFD::create_loss_matrix(const MOCDriver& moc) {
                     g * tot_cells + tile_to_indx(i, ny_ - 1)) +=
             (Dnl_yn - Dyn) * invs_dy;
       }
-      if (j == nx_ - 1 && moc.y_max_bc() == BoundaryCondition::Periodic) {
+      if (j == ny_ - 1 && moc.y_max_bc() == BoundaryCondition::Periodic) {
         M_.coeffRef(g * tot_cells + l, g * tot_cells + tile_to_indx(i, 0)) +=
             (-Dyp - Dnl_yp) * invs_dy;
       }
@@ -1318,7 +1325,9 @@ void CMFD::fixed_source_solve() {
   flux_cmfd_ = new_flux;
 }
 
-void CMFD::update_moc_fluxes(MOCDriver& moc) {
+void CMFD::update_moc_fluxes(
+    MOCDriver& moc,
+    const std::function<double&(std::size_t, std::size_t)>& next_flux) {
   // Update MOC FSR scalar fluxes
   const std::size_t tot_cells = ny_ * nx_;
   bool flux_update_warning = false;
@@ -1390,8 +1399,7 @@ void CMFD::update_moc_fluxes(MOCDriver& moc) {
 
       // Update scalar flux in each MOC FSR
       for (const auto f : fsrs) {
-        const double new_flx = moc.flux(f, g, 0) * flx_ratio;
-        moc.set_flux(f, g, new_flx, 0);
+        next_flux(f, g) *= flx_ratio;
       }
     }
   }
@@ -1419,7 +1427,9 @@ void CMFD::update_moc_fluxes(MOCDriver& moc) {
   }
 }
 
-void CMFD::solve(MOCDriver& moc, double keff, std::size_t moc_iteration) {
+void CMFD::solve(MOCDriver& moc,
+                 std::function<double&(std::size_t, std::size_t)> next_flux,
+                 double keff, std::size_t moc_iteration) {
   Timer cmfd_timer;
   cmfd_timer.reset();
   cmfd_timer.start();
@@ -1436,7 +1446,7 @@ void CMFD::solve(MOCDriver& moc, double keff, std::size_t moc_iteration) {
     cmfd_solves_++;
 
     this->normalize_currents();
-    this->compute_homogenized_xs_and_flux(moc);
+    this->compute_homogenized_xs_and_flux(moc, next_flux);
     this->create_loss_matrix(moc);
     this->create_source_matrix();
     if (mode_ == SimulationMode::Keff) {
@@ -1445,7 +1455,7 @@ void CMFD::solve(MOCDriver& moc, double keff, std::size_t moc_iteration) {
       this->fixed_source_solve();
     }
     solved_ = true;
-    this->update_moc_fluxes(moc);
+    this->update_moc_fluxes(moc, next_flux);
 
     if (neutron_balance_check_) {
       for (std::size_t i = 0; i < nx_; i++) {

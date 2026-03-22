@@ -184,6 +184,9 @@ class MOCDriver {
   bool solved_{false};
 
   void generate_azimuthal_quadrature(std::uint32_t n_angles, double d);
+  void generate_azimuthal_quadrature_weights_simple();
+  bool generate_azimuthal_quadrature_weights_exact();
+  void check_quadrature_for_particle_conservation() const;
   void trace_tracks();
 
   void set_ref_vac_bcs_x_max();
@@ -216,12 +219,6 @@ class MOCDriver {
                    const xt::xtensor<double, 3>& old_flux) const;
 
   friend class CMFD;
-
-  // Used by CMFD to update FSR fluxes
-  void set_flux(std::size_t i, std::size_t g, double new_flx,
-                std::size_t lj = 0) {
-    flux_(g, i, lj) = new_flx;
-  }
 
   // Private default constructor for cereal
   MOCDriver() : polar_quad_(YamamotoTabuchi<6>()) {}

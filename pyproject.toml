@@ -1,9 +1,10 @@
 [build-system]
 requires = [
   "scikit-build-core>=0.10",
-  "pybind11==3.0.1",
+  "pybind11==3.0.2",
   "mypy",
-  "numpy"
+  "numpy",
+  "scipy"
 ]
 build-backend = "scikit_build_core.build"
 
@@ -13,14 +14,14 @@ cmake.build-type = "Release"
 
 [project]
 name = "scarabee"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
   {name = "Hunter Belanger", email = "hunter.belanger@gmail.com"},
 ]
 dependencies = ["numpy"]
 description = "A lattice physics code for LWR analysis."
 readme = "README.md"
-license = "GPL-3.0-only"
+license = "LGPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 keywords = ["lattice physics", "reactor physics", "neutron transport", "LWR"]
@@ -50,13 +51,13 @@ documentation = "https://scarabee.readthedocs.io/en/latest/"
 source = "https://github.com/scarabee-dev/scarabee"
 
 [tool.cibuildwheel]
-skip = ["*musllinux*", "pp*"]
+skip = ["*musllinux*"]
 manylinux-x86_64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
-repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
-before-all = "apt install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libomp-dev mesa-common-dev libgl1-mesa-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev xorg-dev"
+repair-wheel-command = "auditwheel repair --exclude libGLX.so.0 --exclude libGLdispatch.so.0 -w {dest_dir} {wheel}"
+before-all = "dnf install -y wayland-devel libxkbcommon-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel mesa-libGL-devel mesa-libGLU-devel"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]

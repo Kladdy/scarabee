@@ -1,5 +1,6 @@
 build
 compile_commands.json
+.clangd
 .cache
 .vscode
 *__pycache__
@@ -10,8 +11,10 @@ data/tools/U238_600.txt
 data/tools/U235_600.dir
 data/tools/U238_600.dir
 docs/_build
+docs/source/examples/.ipynb_checkpoints
 _scarabee.*
 *imgui.ini
+*scarabee_moc_plotter.ini
 
 # Data files
 data/endf_libraries

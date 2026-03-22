@@ -488,6 +488,42 @@ std::shared_ptr<CrossSection> Material::dilution_xs(
   return this->create_xs_from_micro_data();
 }
 
+std::shared_ptr<CrossSection> Material::infinite_medium_xs(
+    std::shared_ptr<NDLibrary> ndl, std::optional<std::size_t> max_l) {
+  if (max_l.has_value() == false) max_l = max_l_;
+
+  // Start by getting infinite dilution xs for all nuclides
+  this->initialize_inf_dil_xs(ndl, *max_l);
+
+  // Go over all resonant groups
+  for (std::size_t g = ndl->first_resonant_group();
+       g <= ndl->last_resonant_group(); g++) {
+    // Get the material's group dependent potential cross section
+    const double mat_pot_xs = this->lambda_pot_xs(ndl, g);
+
+    // Go over all RESONANT nuclides
+    for (std::size_t i = 0; i < composition_.nuclides.size(); i++) {
+      const std::string& namei = composition_.nuclides[i].name;
+      const auto& nuc = ndl->get_nuclide(namei);
+      if (nuc.resonant == false) continue;
+
+      // Concentration of resonant nuclide, potential xs, and dilution
+      const double Ni = atoms_per_bcm_ * composition_.nuclides[i].fraction;
+      const double macro_pot_xs = Ni * nuc.ir_lambda[g] * nuc.potential_xs;
+      const double sig_0 = (mat_pot_xs - macro_pot_xs) / Ni;
+
+      // Do XS interpolation
+      const auto res_data_i =
+          ndl->dilution_xs(namei, g, temperature(), sig_0, *max_l);
+
+      // Assign new values
+      assign_resonant_xs(i, g, res_data_i);
+    }
+  }
+
+  return this->create_xs_from_micro_data();
+}
+
 std::shared_ptr<CrossSection> Material::ring_carlvik_xs(
     double C, double Rfuel, double Rin, double Rout,
     std::shared_ptr<NDLibrary> ndl, std::optional<std::size_t> max_l) {

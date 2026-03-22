@@ -41,13 +41,14 @@ void init_Cell(py::module& m) {
            "     Distance that can be traveled.\n",
            py::arg("r"), py::arg("u"))
 
-      .def("get_all_fsr_ids", &Cell::get_all_fsr_ids,
-           "Returns a set containing the IDs of all flat source regions in the "
-           "cell.\n\n"
-           "Returns\n"
-           "-------\n"
-           "set of int\n"
-           "    IDs of all FSRs in the cell.")
+      .def(
+          "get_all_fsr_ids", &Cell::get_all_fsr_ids,
+          "Returns a list containing the IDs of all flat source regions in the "
+          "cell.\n\n"
+          "Returns\n"
+          "-------\n"
+          "list of int\n"
+          "    IDs of all FSRs in the cell.")
 
       .def_property_readonly("num_fsrs", &Cell::num_fsrs,
                              "Number of flat source regions in the cell.")

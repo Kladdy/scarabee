@@ -166,4 +166,4 @@ class TestCMFDAnisotropic:
         moc.flux_tolerance = 1.E-5
         moc.solve()
 
-        assert moc.keff == pytest.approx(0.99372, 1E-5)
+        assert moc.keff == pytest.approx(0.99373, 1E-5)

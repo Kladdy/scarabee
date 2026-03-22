@@ -1,5 +1,6 @@
 #include <moc/moc_driver.hpp>
 #include <utils/constants.hpp>
+#include <utils/homogenization.hpp>
 #include <utils/scarabee_exception.hpp>
 #include <utils/logging.hpp>
 #include <utils/timer.hpp>
@@ -8,8 +9,11 @@
 #include <xtensor/core/xmath.hpp>
 #include <xtensor/views/xview.hpp>
 
+#include <Eigen/Dense>
+
 #include <cereal/archives/portable_binary.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -323,6 +327,10 @@ void MOCDriver::solve_isotropic() {
   }
   auto next_flux = flux_;
   double prev_keff = keff_;
+  std::function<double&(std::size_t, std::size_t)> new_flux_viewer(
+      [&next_flux](std::size_t i, std::size_t g) -> double& {
+        return next_flux(g, i, 0);
+      });
 
   double rel_diff_keff = 100.;
   if (mode_ == SimulationMode::FixedSource) {
@@ -375,6 +383,16 @@ void MOCDriver::solve_isotropic() {
       rel_diff_keff = std::abs(keff_ - prev_keff) / keff_;
     }
 
+    // Apply CMFD
+    if (cmfd_) {
+      cmfd_->solve(*this, new_flux_viewer, prev_keff, iteration);
+      if (cmfd_->solved() && mode_ == SimulationMode::Keff) {
+        prev_keff = keff_;
+        keff_ = cmfd_->keff();
+        rel_diff_keff = std::abs(keff_ - prev_keff) / keff_;
+      }
+    }
+
     // Get difference
     max_flx_diff = xt::amax(xt::abs(next_flux - flux_) / next_flux)();
 
@@ -388,16 +406,6 @@ void MOCDriver::solve_isotropic() {
     }
 
     flux_ = next_flux;
-
-    // Apply CMFD
-    if (cmfd_) {
-      cmfd_->solve(*this, prev_keff, iteration);
-      if (cmfd_->solved() && mode_ == SimulationMode::Keff) {
-        prev_keff = keff_;
-        keff_ = cmfd_->keff();
-        rel_diff_keff = std::abs(keff_ - prev_keff) / keff_;
-      }
-    }
 
     iteration_timer.stop();
     spdlog::info("-------------------------------------");
@@ -468,6 +476,10 @@ void MOCDriver::solve_anisotropic() {
 
   auto next_flux = flux_;
   double prev_keff = keff_;
+  std::function<double&(std::size_t, std::size_t)> new_flux_viewer(
+      [&next_flux](std::size_t i, std::size_t g) -> double& {
+        return next_flux(g, i, 0);
+      });
 
   double rel_diff_keff = 100.;
   if (mode_ == SimulationMode::FixedSource) {
@@ -477,12 +489,14 @@ void MOCDriver::solve_anisotropic() {
   }
 
   double max_flx_diff = 100;
+  double cmfd_time = 0.;
   std::size_t iteration = 0;
   Timer iteration_timer;
   while (rel_diff_keff > keff_tol_ || max_flx_diff > flux_tol_) {
     iteration_timer.reset();
     iteration_timer.start();
     iteration++;
+    cmfd_time = 0.;
 
     fill_source_anisotropic(src, flux_);
     xt::view(src, xt::all(), xt::all(), 0) += extern_src_;
@@ -504,7 +518,7 @@ void MOCDriver::solve_anisotropic() {
     if (cmfd_) cmfd_->zero_currents();
     sweep_anisotropic(next_flux, src);
 
-    // Get difference
+    // Get difference, which is temporary based on pre-CMFD flux
     auto new_flux = xt::view(next_flux, xt::all(), xt::all(), 0);
     auto old_flux = xt::view(flux_, xt::all(), xt::all(), 0);
     max_flx_diff = xt::amax(xt::abs(new_flux - old_flux) / new_flux)();
@@ -530,18 +544,23 @@ void MOCDriver::solve_anisotropic() {
       rel_diff_keff = std::abs(keff_ - prev_keff) / keff_;
     }
 
-    // Must do this BEFORE CMFD but AFTER calculating keff
-    flux_ = next_flux;
-
     // Apply CMFD
     if (cmfd_ && set_neg_flux_to_zero == false) {
-      cmfd_->solve(*this, prev_keff, iteration);
+      cmfd_->solve(*this, new_flux_viewer, prev_keff, iteration);
       if (cmfd_->solved() && mode_ == SimulationMode::Keff) {
         prev_keff = keff_;
         keff_ = cmfd_->keff();
         rel_diff_keff = std::abs(keff_ - prev_keff) / keff_;
       }
+      cmfd_time = cmfd_->solve_time();
     }
+
+    // So long as no flux values were set to zero, we should try to compute the
+    // flux difference after CMFD
+    if (set_neg_flux_to_zero == false)
+      max_flx_diff = xt::amax(xt::abs(new_flux - old_flux) / new_flux)();
+
+    flux_ = next_flux;
 
     iteration_timer.stop();
     spdlog::info("-------------------------------------");
@@ -555,7 +574,7 @@ void MOCDriver::solve_anisotropic() {
     spdlog::info("     iteration time: {:.5E} s",
                  iteration_timer.elapsed_time());
     if (cmfd_ && cmfd_->solved()) {
-      spdlog::info("CMFD solve time: {:.5E} s", cmfd_->solve_time());
+      spdlog::info("CMFD solve time: {:.5E} s", cmfd_time);
     }
     // Write warnings about negative flux and source
     if (set_neg_src_to_zero) {
@@ -1033,13 +1052,56 @@ void MOCDriver::generate_azimuthal_quadrature(std::uint32_t n_angles,
     angle_info_[i].backward_index = i + n_track_angles_;
   }
 
-  // Go through and calculate the angle weights
-  for (std::uint32_t i = 0; i < n_track_angles_; i++) {
+  // Go through and calculate the angle weights. If we have isotropic
+  // scattering, we only use the "simple" method, as particle conservation is
+  // not sensitive to the azimuthal quadrature in this case.
+  if (this->anisotropic() == false) {
+    this->generate_azimuthal_quadrature_weights_simple();
+  } else {
+    // If we have anisotropic scattering, we try to use a quadrature which will
+    // respect particle conservation. We do this by modifying the weights to
+    // achieve exact integration of the functions described in [2]. Sometimes,
+    // this can yield negative weights though. In this case, we use the simple
+    // method anyway.
+    bool pos_exact_wgts = this->generate_azimuthal_quadrature_weights_exact();
+    if (pos_exact_wgts == false) {
+      spdlog::warn(
+          "Exact azimuthal quadrature weights were negative. Using simple "
+          "weights instead.");
+      if (this->anisotropic()) {
+        spdlog::warn(
+            "This may cause problems with particle conservation when using "
+            "anisotropic scattering. CMFD might not converge.");
+      }
+      this->generate_azimuthal_quadrature_weights_simple();
+    }
+  }
+
+  // Write quadrature info if requested
+  double angle_sum = 0.;
+  for (const auto& ai : angle_info_) {
+    spdlog::debug("Angle {:.5E} pi: weight {:.5E}, width {:.5E}, nx {}, ny {}",
+                  ai.phi / PI, ai.wgt, ai.d, ai.nx, ai.ny);
+    angle_sum += ai.wgt;
+  }
+  spdlog::debug("Azimuthal quadrature weight sum: {:.3f} pi", 4. * angle_sum);
+
+  // If anisotropic scattering is on, this will make sure that particle
+  // conservation is achieved by the azimuthal and polar quadratures.
+  check_quadrature_for_particle_conservation();
+}
+
+void MOCDriver::generate_azimuthal_quadrature_weights_simple() {
+  // Generate weights based on the spacing between azimuthal angles. This is
+  // the approach taken by OpenMOC and described in the handbook. It is very
+  // easy, but does not necessarily guarantee particle conservation with
+  // anisotropic scattering.
+  for (std::size_t i = 0; i < angle_info_.size(); i++) {
     if (i == 0) {
       const double phi_0 = angle_info_[0].phi;
       const double phi_1 = angle_info_[1].phi;
       angle_info_[i].wgt = (1. / (2. * PI)) * (0.5 * (phi_1 - phi_0) + phi_0);
-    } else if (i == (n_track_angles_ - 1)) {
+    } else if (i == (angle_info_.size() - 1)) {
       const double phi_im1 = angle_info_[i - 1].phi;
       const double phi_i = angle_info_[i].phi;
       angle_info_[i].wgt =
@@ -1049,10 +1111,138 @@ void MOCDriver::generate_azimuthal_quadrature(std::uint32_t n_angles,
       const double phi_ip1 = angle_info_[i + 1].phi;
       angle_info_[i].wgt = (1. / (4. * PI)) * (phi_ip1 - phi_im1);
     }
+  }
+}
 
-    const auto& ai = angle_info_[i];
-    spdlog::debug("Angle {:.5E} pi: weight {:.5E}, width {:.5E}, nx {}, ny {}",
-                  ai.phi / PI, ai.wgt, ai.d, ai.nx, ai.ny);
+bool MOCDriver::generate_azimuthal_quadrature_weights_exact() {
+  // This method should generate weights for the azimuthal angles which will
+  // ensure that the integration criteria outlined in [2] are respected. This
+  // is done by building the Vandermode matrix for the series of cosine
+  // integrals that must be preserved. This method, however, does not
+  // necessarily guarantee that all the weights will be positive ! This is
+  // checked at the end, and if all weights are positive, true is returned.
+
+  // Get the number of angles in (0, 2pi)
+  int na = 0;
+  for (const auto& angle : angle_info_)
+    if (angle.phi > 0 && angle.phi < PI_2) na++;
+
+  // Allocate needed array and vector
+  Eigen::VectorXd I(na);
+  Eigen::MatrixXd V(na, na);
+  I.fill(0.);
+  V.fill(0.);
+
+  // Build the Vandermode matrix for cosines
+  for (int a = 0; a < na; a++) {
+    if (a == 0) {
+      I(a) = PI_2;
+    }
+    const double m = static_cast<double>(a);
+
+    auto f = [m](double x) { return std::cos(2. * m * x); };
+
+    for (int aa = 0; aa < na; aa++) {
+      V(a, aa) = f(angle_info_[static_cast<std::size_t>(aa)].phi);
+    }
+  }
+
+  // Solve array for weights
+  Eigen::ColPivHouseholderQR<Eigen::MatrixXd> solver(V);
+  Eigen::VectorXd w = solver.solve(I);
+
+  // Extract a 2pi factor, as in all methods, we add this factor
+  w /= (2. * PI);
+
+  // Assign weights
+  bool weights_all_positive = true;
+  double largest_negative_wgt = 0.;
+  for (int a = 0; a < na; a++) {
+    const std::size_t sta = static_cast<std::size_t>(a);
+    angle_info_[sta].wgt = w(a);
+    (angle_info_.rbegin() + a)->wgt = w(a);
+
+    if (w(a) < 0.) {
+      weights_all_positive = false;
+      if (w(a) < largest_negative_wgt) largest_negative_wgt = w(a);
+    }
+  }
+
+  if (largest_negative_wgt < 0.)
+    spdlog::warn("Largest negative weigth is {:.5E}.", largest_negative_wgt);
+
+  return weights_all_positive;
+}
+
+void MOCDriver::check_quadrature_for_particle_conservation() const {
+  // Only need to do these checks if anisotropic scattering is on
+  if (this->anisotropic() == false || this->cmfd_ == nullptr) return;
+
+  spdlog::info("Checking quadrature for particle conservation");
+
+  // These checks come from [2], and are required for particle conservation
+  // when modeling anisotropic scattering.
+
+  bool problem_azimuth{false};
+  bool problem_polar{false};
+
+  // Check quadratures for each L
+  for (int k = 0; k <= static_cast<int>(max_L_); k++) {
+    const double kd = static_cast<double>(k);
+
+    // Check azimuthal quadrature
+    {
+      double integral = 0.;
+      for (const auto& angle : angle_info_) {
+        if (angle.phi < 0. || angle.phi > PI_2) continue;
+        integral += 2. * PI * angle.wgt * std::cos(2. * kd * angle.phi);
+      }
+
+      // Get the expected value of the integral
+      const double exp_integral{k == 0 ? PI_2 : 0.};
+      const double err = integral - exp_integral;
+
+      if (std::abs(err) > 1.E-10) {
+        spdlog::warn(
+            "Absolute error in azimuthal quadrature integration for L={} is {: "
+            ".5E}.",
+            k, err);
+        problem_azimuth = true;
+      }
+    }
+
+    // Check polar quadrature
+    {
+      double integral = 0.;
+      for (std::size_t i = 0; i < polar_quad_.sin().size(); i++) {
+        const unsigned int o = static_cast<unsigned int>(2 * k);
+        const double sin_theta = polar_quad_.sin()[i];
+        const double cos_theta = std::sqrt(1. - (sin_theta * sin_theta));
+        integral += polar_quad_.wgt()[i] * legendre(o, cos_theta);
+      }
+
+      const double exp_integral = (k == 0 ? 1. : 0.);
+      const double err = integral - exp_integral;
+
+      if (std::abs(err) > 1.E-10) {
+        spdlog::warn(
+            "Absolute error in polar quadrature integration for L={} is {: "
+            ".5E}.",
+            k, err);
+        problem_polar = true;
+      }
+    }
+  }
+
+  if (problem_azimuth) {
+    spdlog::warn(
+        "Could have problems with particle conservation due to azimuthal "
+        "quadrature.");
+  }
+  if (problem_polar) {
+    spdlog::warn(
+        "Could have problems with particle conservation due to polar "
+        "quadrature.");
   }
 }
 
@@ -1475,9 +1665,9 @@ void MOCDriver::segment_renormalization() {
   }
 
   // We now bias the traced segment lengths, so that we better predict the
-  // volume of our flat source regions. We do this for each angle, but it
-  // could be done for all angles together. A great explanation of this is
-  // found in the MPACT theory manual ORNL/SPR-2021/2330 end of 5.4.
+  // volume of our flat source regions. We do this for each azimuthal angle
+  // independently, because this is required for particle conservation with
+  // anisotropic scattering, as outlined in Ref. 2.
 
   // This holds the approximations for the FSR areas
   std::vector<double> approx_vols(nfsrs_, 0.);
@@ -1493,8 +1683,18 @@ void MOCDriver::segment_renormalization() {
     // Iterate through tracks and segments, adding contributions to volumes
     for (auto& track : tracks) {
       for (auto& seg : track) {
-        const std::size_t i = seg.fsr_indx();
-        approx_vols[i] += seg.length() * d;
+        approx_vols[seg.fsr_indx()] += seg.length() * d;
+      }
+    }
+
+    // Make sure no approximate volume is zero !
+    for (std::size_t i = 0; i < approx_vols.size(); i++) {
+      if (approx_vols[i] == 0.) {
+        spdlog::warn(
+            "Some of the approximate FSR areas are zero for azimuthal angle "
+            "{:} ( {:.5E} pi ).",
+            a, angle_info_[a].phi / PI);
+        break;
       }
     }
 
@@ -1772,111 +1972,7 @@ std::shared_ptr<CrossSection> MOCDriver::homogenize() const {
 
 std::shared_ptr<CrossSection> MOCDriver::homogenize(
     const std::vector<std::size_t>& regions) const {
-  // Make sure we were actually provided with regions
-  if (regions.empty()) {
-    const auto mssg = "No regions were provided for homogenization.";
-    spdlog::error(mssg);
-    throw ScarabeeException(mssg);
-  }
-
-  // Check all regions are valid
-  if (regions.size() > this->nregions()) {
-    const auto mssg =
-        "The number of provided regions is greater than the number of regions.";
-    spdlog::error(mssg);
-    throw ScarabeeException(mssg);
-  }
-
-  for (const auto m : regions) {
-    if (m >= this->nfsr()) {
-      const auto mssg = "Invalid region index in homogenization list.";
-      spdlog::error(mssg);
-      throw ScarabeeException(mssg);
-    }
-  }
-
-  // We now begin homogenization
-  const std::size_t NR = regions.size();
-  const std::size_t NG = this->ngroups();
-
-  std::size_t max_l = 0;
-  for (const auto m : regions) {
-    const auto m_max_l = this->xs(m)->max_legendre_order();
-    if (m_max_l > max_l) {
-      max_l = m_max_l;
-    }
-  }
-
-  xt::xtensor<double, 1> Et = xt::zeros<double>({NG});
-  xt::xtensor<double, 1> Dtr = xt::zeros<double>({NG});
-  xt::xtensor<double, 1> Ea = xt::zeros<double>({NG});
-  xt::xtensor<double, 3> Es = xt::zeros<double>({max_l + 1, NG, NG});
-  xt::xtensor<double, 1> Ef = xt::zeros<double>({NG});
-  xt::xtensor<double, 1> vEf = xt::zeros<double>({NG});
-  xt::xtensor<double, 1> chi = xt::zeros<double>({NG});
-
-  // We need to calculate the total fission production in each volume for
-  // generating the homogenized fission spectrum.
-  std::vector<double> fiss_prod(NR, 0.);
-  std::size_t j = 0;
-  for (const auto i : regions) {
-    const auto& mat = this->xs(i);
-    const double V = this->volume(i);
-    for (std::size_t g = 0; g < NG; g++) {
-      fiss_prod[j] += mat->vEf(g) * this->flux(i, g) * V;
-    }
-    j++;
-  }
-  const double sum_fiss_prod =
-      std::accumulate(fiss_prod.begin(), fiss_prod.end(), 0.);
-  const double invs_sum_fiss_prod =
-      sum_fiss_prod > 0. ? 1. / sum_fiss_prod : 1.;
-
-  for (std::size_t g = 0; g < NG; g++) {
-    // Get the sum of flux*volume for this group
-    double sum_fluxV = 0.;
-    for (const auto i : regions) {
-      sum_fluxV += this->flux(i, g) * this->volume(i);
-    }
-
-    if (sum_fluxV == 0.) {
-      std::stringstream mssg;
-      mssg << "Cannot homogenize cross sections. ";
-      mssg << "Sum of FSR flux*volume in group " << g << " is zero. ";
-      mssg << "If you see this error while using CMFD, try skipping several "
-              "MOC iterations before applying CMFD.";
-      const auto err_str = mssg.str();
-      spdlog::error(err_str);
-      throw ScarabeeException(err_str);
-    }
-
-    const double invs_sum_fluxV = 1. / sum_fluxV;
-
-    j = 0;
-    for (const auto i : regions) {
-      const auto& mat = this->xs(i);
-      const double V = volume(i);
-      const double flx = flux(i, g);
-      const double coeff = invs_sum_fluxV * flx * V;
-      Et(g) += coeff * mat->Et(g);
-      Dtr(g) += coeff * mat->Dtr(g);
-      Ea(g) += coeff * mat->Ea(g);
-      Ef(g) += coeff * mat->Ef(g);
-      vEf(g) += coeff * mat->vEf(g);
-
-      chi(g) += invs_sum_fiss_prod * fiss_prod[j] * mat->chi(g);
-
-      for (std::size_t l = 0; l <= max_l; l++) {
-        for (std::size_t gg = 0; gg < NG; gg++) {
-          Es(l, g, gg) += coeff * mat->Es(l, g, gg);
-        }
-      }
-
-      j++;
-    }
-  }
-
-  return std::make_shared<CrossSection>(Et, Dtr, Ea, Es, Ef, vEf, chi);
+  return scarabee::homogenize({*this}, regions);
 }
 
 xt::xtensor<double, 1> MOCDriver::homogenize_flux_spectrum() const {
@@ -1891,47 +1987,7 @@ xt::xtensor<double, 1> MOCDriver::homogenize_flux_spectrum() const {
 
 xt::xtensor<double, 1> MOCDriver::homogenize_flux_spectrum(
     const std::vector<std::size_t>& regions) const {
-  // Make sure we were actually provided with regions
-  if (regions.empty()) {
-    const auto mssg =
-        "No regions were provided for homogenization of flux spectrum.";
-    spdlog::error(mssg);
-    throw ScarabeeException(mssg);
-  }
-
-  // Check all regions are valid
-  if (regions.size() > this->nfsr()) {
-    const auto mssg =
-        "The number of provided regions is greater than the number of regions.";
-    spdlog::error(mssg);
-    throw ScarabeeException(mssg);
-  }
-
-  for (const auto m : regions) {
-    if (m >= this->nregions()) {
-      const auto mssg = "Invalid region index in homogenization list.";
-      spdlog::error(mssg);
-      throw ScarabeeException(mssg);
-    }
-  }
-
-  const std::size_t NG = this->ngroups();
-
-  // First, calculate the sum of the volumes
-  double sum_V = 0.;
-  for (const auto i : regions) {
-    sum_V += this->volume(i);
-  }
-  const double invs_sum_V = 1. / sum_V;
-
-  xt::xtensor<double, 1> spectrum = xt::zeros<double>({NG});
-  for (std::size_t g = 0; g < NG; g++) {
-    for (const auto i : regions) {
-      spectrum(g) += invs_sum_V * this->volume(i) * this->flux(i, g);
-    }
-  }
-
-  return spectrum;
+  return scarabee::homogenize_flux_spectrum({*this}, regions);
 }
 
 void MOCDriver::apply_criticality_spectrum(const xt::xtensor<double, 1>& flux) {
@@ -2010,3 +2066,7 @@ std::shared_ptr<MOCDriver> MOCDriver::load_bin(const std::string& fname) {
 // [1] G. Gunow, B. Forget, and K. Smith, “Stabilization of multi-group neutron
 //     transport with transport-corrected cross-sections,” Ann. Nucl. Energy,
 //     vol. 126, pp. 211–219, 2019, doi: 10.1016/j.anucene.2018.10.036.
+//
+// [2] R. L. Tellier and A. Hébert, “Anisotropy and Particle Conservation for
+//     Trajectory-Based Deterministic Methods,” Nucl. Sci. Eng., vol. 158,
+//     no. 1, pp. 28–39, 2008, doi: 10.13182/nse08-a2736.

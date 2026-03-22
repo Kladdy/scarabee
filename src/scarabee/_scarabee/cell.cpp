@@ -2,8 +2,6 @@
 #include <utils/scarabee_exception.hpp>
 #include <utils/logging.hpp>
 
-#include <sstream>
-
 namespace scarabee {
 
 Cell::Cell(double dx, double dy)
@@ -79,11 +77,12 @@ std::vector<UniqueFSR> Cell::get_all_fsr_in_cell(const Vector& /*r*/,
   return out;
 }
 
-std::set<std::size_t> Cell::get_all_fsr_ids() const {
-  std::set<std::size_t> ids;
+std::vector<std::size_t> Cell::get_all_fsr_ids() const {
+  std::vector<std::size_t> ids(fsrs_.size(), 0);
 
+  // These should already be in a sorted order !
   for (std::size_t i = 0; i < fsrs_.size(); i++) {
-    ids.insert(fsrs_[i].id());
+    ids[i] = fsrs_[i].id();
   }
 
   return ids;

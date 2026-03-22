@@ -1,0 +1,18 @@
+============================
+Scarabée 0.1.0 Release Notes
+============================
+
+This is the first tagged release of Scarabée ! Despite being young, the code is in a
+fairly usable state, where the user can use the transport solvers on their own, or
+perform assembly calculations with the lattice physics capabilities, including
+depletion. Basic install instructions and usage are now in the docs. Building a nuclear
+data library has now largely been automated, meaning someone other than the developers
+could likely succeed in doing it.
+
+------------
+Contributors
+------------
+
+- `Hunter Belanger <https://github.com/HunterBelanger>`_
+- `Parth Singh <https://github.com/2018uch0002>`_
+- `Jason Gaiardelli <https://github.com/gaiarj>`_

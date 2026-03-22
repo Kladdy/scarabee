@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <vector>
 
 namespace scarabee {
 
@@ -353,11 +354,11 @@ std::size_t Cartesian2D::Tile::get_num_fsr_instances(std::size_t id) const {
   return 0;
 }
 
-std::set<std::size_t> Cartesian2D::get_all_fsr_ids() const {
+std::vector<std::size_t> Cartesian2D::get_all_fsr_ids() const {
   std::set<std::size_t> fsr_ids;
 
   for (std::size_t t = 0; t < tiles_.size(); t++) {
-    std::set<std::size_t> tile_ids;
+    std::vector<std::size_t> tile_ids;
     if (tiles_.flat(t).c2d) {
       tile_ids = tiles_.flat(t).c2d->get_all_fsr_ids();
     } else if (tiles_.flat(t).cell) {
@@ -367,7 +368,10 @@ std::set<std::size_t> Cartesian2D::get_all_fsr_ids() const {
     for (const auto fsr : tile_ids) fsr_ids.insert(fsr);
   }
 
-  return fsr_ids;
+  std::vector<std::size_t> out_ids(fsr_ids.begin(), fsr_ids.end());
+  std::sort(out_ids.begin(), out_ids.end());
+
+  return out_ids;
 }
 
 void Cartesian2D::fill_fsrs(

@@ -108,6 +108,10 @@ class Material {
       double C, double Ee, std::shared_ptr<NDLibrary> ndl,
       std::optional<std::size_t> max_l = std::nullopt);
 
+  std::shared_ptr<CrossSection> infinite_medium_xs(
+      std::shared_ptr<NDLibrary> ndl,
+      std::optional<std::size_t> max_l = std::nullopt);
+
   std::shared_ptr<CrossSection> dilution_xs(
       const std::vector<double>& dils, std::shared_ptr<NDLibrary> ndl,
       std::optional<std::size_t> max_l = std::nullopt);

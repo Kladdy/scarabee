@@ -49,6 +49,11 @@ void init_NEMDiffusionDriver(py::module& m) {
           &NEMDiffusionDriver::set_flux_tolerance,
           "Maximum relative error in the flux for problem convergence.")
 
+      .def_property("leakage_corrections",
+                    &NEMDiffusionDriver::leakage_corrections,
+                    &NEMDiffusionDriver::set_leakage_corrections,
+                    "Apply leakage corrections to update node cross sections.")
+
       .def("flux",
            py::overload_cast<double /*x*/, double /*y*/, double /*z*/,
                              std::size_t /*g*/>(&NEMDiffusionDriver::flux,
@@ -150,19 +155,6 @@ void init_NEMDiffusionDriver(py::module& m) {
            "-------\n"
            "array of float\n"
            "      Value of the average power density in each node.\n")
-
-      .def("pin_power", &NEMDiffusionDriver::pin_power,
-           "Constructs an array storing the pin powers reconstructed on a "
-           "provided axial mesh.\n\n"
-           "Parameters\n"
-           "----------\n"
-           "z : array of float\n"
-           "    Positions along the z axis.\n\n"
-           "Returns\n"
-           "-------\n"
-           "array of float\n"
-           "      Value of pin powers at all provided z positions.\n",
-           py::arg("z"))
 
       .def("save", &NEMDiffusionDriver::save,
            "Saves the NEMDiffusionDriver to a binary file.\n\n"

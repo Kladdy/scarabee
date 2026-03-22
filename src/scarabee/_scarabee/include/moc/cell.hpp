@@ -15,10 +15,9 @@
 #include <cereal/types/memory.hpp>
 #include <cereal/types/vector.hpp>
 
-#include <cmath>
+#include <algorithm>
 #include <map>
 #include <memory>
-#include <set>
 #include <sstream>
 #include <vector>
 
@@ -68,7 +67,7 @@ class Cell {
 
   std::size_t ngroups() const { return fsrs_.front().xs()->ngroups(); }
 
-  std::set<std::size_t> get_all_fsr_ids() const;
+  std::vector<std::size_t> get_all_fsr_ids() const;
 
   std::size_t get_num_fsr_instances(std::size_t id) const;
 

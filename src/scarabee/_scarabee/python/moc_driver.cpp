@@ -472,6 +472,7 @@ void init_MOCDriver(py::module& m) {
           "plot",
           [](const MOCDriver& md) {
             ImApp::App guiplotter(1920, 1080, "Scarabee MOC Plotter");
+            guiplotter.io().IniFilename = "scarabee_moc_plotter.ini";
             guiplotter.enable_docking();
             guiplotter.push_layer(std::make_unique<MOCPlotter>(&md));
             guiplotter.run();
