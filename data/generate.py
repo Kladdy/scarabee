@@ -419,6 +419,18 @@ nuclides = [
     parse_nuclide("Cm246"),
 ]
 
+# Handle elemental evaluations
+# See https://github.com/scarabee-dev/scarabee/pull/19#discussion_r2616262546
+match library.label:
+    case "endf71":
+        # Remove all C nuclides and add elemental C evaluation
+        nuclides = [nuclide for nuclide in nuclides if nuclide.symbol != "C"]
+        nuclides.append(parse_nuclide("C0"))
+    case "jeff33":
+        # Remove C12 evaluation and add elemental C evaluation
+        nuclides = [nuclide for nuclide in nuclides if not (nuclide.symbol == "C" and nuclide.A == 12)]
+        nuclides.append(parse_nuclide("C0"))
+
 # TODO: Add parallelization
 [process_nuclide(nuclide) for nuclide in nuclides]
 
