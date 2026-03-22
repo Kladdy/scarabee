@@ -3,6 +3,7 @@ from enum import Enum, auto
 from pathlib import Path
 import os
 from typing import Literal
+import ENDFtk
 
 @dataclass
 class Nuclide:
@@ -182,7 +183,6 @@ class ENDFLibrary:
             case _:
                 raise ValueError(f"Unknown library label: {self.label}")
 
-    # TODO: Use ENDFtk to parse available temperatures from TSL files instead of hardcoding
     def get_tsl_temperatures(self, tsl_material: ThermalScatteringMaterial) -> list[float]:
         """
         Get the available temperatures for a thermal scattering material in this ENDF library.
@@ -197,49 +197,17 @@ class ENDFLibrary:
         list[float]
             The available temperatures for the thermal scattering material in this ENDF library.
         """
-        match self.label:
-            case "endf71":
-                match tsl_material.label():
-                    case "H_in_H2O":
-                        return [
-                            293.6, 350.0, 400.0, 450.0, 500.0, 550.0, 600.0, 650.0, 800.0,
-                        ]
-                    case "D_in_D2O":
-                        return [
-                            293.6, 350.0, 400.0, 450.0, 500.0, 550.0, 600.0, 650.0,
-                        ]
-                    case _:
-                        raise ValueError(f"Unknown TSL material: {tsl_material.label()} for library {self.label}")
-            case "endf80" | "endf81":
-                match tsl_material.label():
-                    case "H_in_H2O":
-                        return [
-                            283.6, 293.6, 300.0, 323.6, 350.0, 373.6, 400.0, 423.6, 450.0,
-                            473.6, 500.0, 523.6, 550.0, 573.6, 600.0, 623.6, 650.0, 800.0,
-                        ]
-                    case "D_in_D2O":
-                        return [
-                            283.6, 293.6, 300.0, 323.6, 350.0, 373.6, 400.0, 423.6, 450.0,
-                            473.6, 500.0, 523.6, 550.0, 573.6, 600.0, 623.6, 650.0,
-                        ]
-                    case _:
-                        raise ValueError(f"Unknown TSL material: {tsl_material.label()} for library {self.label}")
-            case "jeff33" | "jeff40":
-                match tsl_material.label():
-                    case "H_in_H2O": # jeff40 has additional temperatures, but using only a subset of these in order to be consistent with jeff33
-                        return [
-                            293.6, 323.6, 373.6, 423.6, 473.6, 523.6, 573.6, 623.6, 647.2, 
-                            800.0, 1000.0
-                        ]
-                    case "D_in_D2O":
-                        return [
-                            283.6, 293.6, 300.0, 323.6, 350.0, 373.6, 400.0, 423.6, 450.0,
-                            473.6, 500.0, 523.6, 550.0, 573.6, 600.0, 623.6, 650.0
-                        ]
-                    case _:
-                        raise ValueError(f"Unknown TSL material: {tsl_material.label()} for library {self.label}")
-            case _:
-                raise NotImplementedError(f"TSL temperatures not implemented for library: {self.label}")
+
+        tsl_filename = self.get_filename_of_tsl_material(tsl_material)
+        tsl_path = self.tsl_path / tsl_filename
+        tape = ENDFtk.tree.Tape.from_file(tsl_path)
+        mat = tape.material_numbers[0]
+        tsl = tape.MAT(mat).MF(7).MT(4).parse() # Get incoherent-inelastic section (always present)
+        tsl_laws = tsl.scattering_law.scattering_functions.to_list()
+        first_law = tsl_laws[0]
+        temps = first_law.temperatures.to_list()
+
+        return temps
 
 base_endf_path = Path(__file__).parent / "endf_libraries"
 
